@@ -201,3 +201,28 @@ Work Log:
 
 Stage Summary:
 - All 6 upgrade areas shipped: rebrand+PWA, Firebase Google login, Settings/Profile with BYOK+Supabase, AI Agent Builder (describe→generate), token accounting with daily limits + max agents + auto-delete idle. Dev server needs restart + verification.
+
+---
+Task ID: I-PROC
+Agent: main
+Task: Add connection procedures to all integration platforms
+
+Work Log:
+- Added `procedure` field (array of {title, body} steps) and `docsUrl` to PlatformDef interface.
+- Wrote real, detailed step-by-step setup guides for all 9 platforms:
+  - Web Widget: publish agent → copy embed → paste in HTML → set domains → test
+  - REST API: publish → generate API key → call endpoint → parse SSE stream → Node.js example
+  - Facebook Messenger: create Meta app → add Messenger product → generate Page Access Token → set Verify Token → subscribe Page → set webhook URL
+  - WhatsApp: create Meta Business app → get Phone Number ID → generate Access Token → configure webhook → add test number
+  - Telegram: open BotFather → /newbot → copy Bot Token → enter token → test → customize
+  - Slack: create Slack App → add bot scopes → install → copy Signing Secret → enable Event Subscriptions → enter credentials
+  - Discord: create application → copy Application ID → create bot → copy Bot Token → enable Message Content Intent → invite to server → enter credentials
+  - Email: use dedicated account → enable IMAP → generate App Password → find IMAP/SMTP hosts → enter credentials → test
+  - SMS (Twilio): create account → get phone number → copy Account SID → copy Auth Token → configure webhook → enter credentials → upgrade from trial
+- Added "Guide" button to each platform card (opens standalone procedure dialog with numbered steps + docs link + "Connect now" button).
+- Added collapsible "How to connect" section inside the config dialog (toggle to expand steps while entering credentials).
+- Each step has a numbered badge, title, and detailed body. Official docs links included.
+- Lint: 0 errors. Server compiles clean. Integrations API: 200.
+
+Stage Summary:
+- Every integration platform now has a complete, actionable setup guide accessible via a "Guide" button on each card AND a collapsible section inside the connect dialog. Users can follow the steps, then click "Connect now" to enter credentials.

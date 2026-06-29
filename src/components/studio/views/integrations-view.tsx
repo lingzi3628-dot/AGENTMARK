@@ -10,6 +10,9 @@ import {
   Trash2,
   Check,
   CircleDot,
+  BookOpen,
+  ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,6 +53,8 @@ export function IntegrationsView() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [showProcedure, setShowProcedure] = useState(false);
+  const [guidePlatform, setGuidePlatform] = useState<string | null>(null);
 
   const fetchIntegrations = useCallback(async (agentId: string) => {
     setLoading(true);
@@ -86,6 +91,10 @@ export function IntegrationsView() {
     ? PLATFORMS.find((p) => p.id === dialogPlatform) ?? null
     : null;
 
+  const guidePlatformDef = guidePlatform
+    ? PLATFORMS.find((p) => p.id === guidePlatform) ?? null
+    : null;
+
   function openConnect(platformId: string) {
     const platform = PLATFORMS.find((p) => p.id === platformId);
     if (!platform) return;
@@ -112,6 +121,7 @@ export function IntegrationsView() {
     setDialogOpen(false);
     setDialogPlatform(null);
     setEditingIntegration(null);
+    setShowProcedure(false);
   }
 
   async function handleSave() {
@@ -337,6 +347,16 @@ export function IntegrationsView() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        className="text-muted-foreground"
+                        onClick={() => { setGuidePlatform(platform.id); }}
+                        aria-label={`How to connect ${platform.name}`}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        Guide
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         className="text-muted-foreground hover:text-destructive"
                         onClick={() => handleDisconnect(integration)}
                         disabled={isDisconnecting}
@@ -347,14 +367,25 @@ export function IntegrationsView() {
                         ) : (
                           <Trash2 className="h-3.5 w-3.5" />
                         )}
-                        Disconnect
                       </Button>
                     </>
                   ) : (
-                    <Button size="sm" onClick={() => openConnect(platform.id)}>
-                      <Plug className="h-3.5 w-3.5" />
-                      Connect
-                    </Button>
+                    <>
+                      <Button size="sm" onClick={() => openConnect(platform.id)}>
+                        <Plug className="h-3.5 w-3.5" />
+                        Connect
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground"
+                        onClick={() => { setGuidePlatform(platform.id); }}
+                        aria-label={`How to connect ${platform.name}`}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        Guide
+                      </Button>
+                    </>
                   )}
                 </CardFooter>
               </Card>
@@ -509,6 +540,49 @@ export function IntegrationsView() {
                 </div>
               );
             })}
+
+            {/* How to connect — collapsible procedure */}
+            {dialogPlatformDef?.procedure && dialogPlatformDef.procedure.length > 0 && (
+              <div className="rounded-lg border border-border bg-muted/30">
+                <button
+                  type="button"
+                  onClick={() => setShowProcedure((v) => !v)}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-muted/50"
+                >
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  How to connect {dialogPlatformDef.name}
+                  <ChevronDown className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", showProcedure && "rotate-180")} />
+                </button>
+                {showProcedure && (
+                  <div className="max-h-64 overflow-y-auto studio-scroll border-t border-border px-3 py-2">
+                    <ol className="space-y-2.5">
+                      {dialogPlatformDef.procedure.map((step, i) => (
+                        <li key={i} className="flex gap-2.5 text-xs">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="font-medium text-foreground">{step.title}</p>
+                            <p className="mt-0.5 text-muted-foreground">{step.body}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                    {dialogPlatformDef.docsUrl && (
+                      <a
+                        href={dialogPlatformDef.docsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Official {dialogPlatformDef.name} documentation
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -526,6 +600,83 @@ export function IntegrationsView() {
                 <Plug className="h-4 w-4" />
               )}
               {editingIntegration ? "Save" : "Connect"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Standalone Guide dialog — shows full setup procedure */}
+      <Dialog
+        open={guidePlatform !== null}
+        onOpenChange={(o) => { if (!o) setGuidePlatform(null); }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {guidePlatformDef ? (
+                <span
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-md",
+                    guidePlatformDef.color,
+                  )}
+                >
+                  <Icon name={guidePlatformDef.icon} className="h-3.5 w-3.5" />
+                </span>
+              ) : null}
+              How to connect {guidePlatformDef?.name ?? ""}
+            </DialogTitle>
+            <DialogDescription>
+              {guidePlatformDef?.description ?? ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-y-auto studio-scroll">
+            <ol className="space-y-3">
+              {guidePlatformDef?.procedure.map((step, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-sm font-medium text-foreground">{step.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {guidePlatformDef?.docsUrl && (
+              <a
+                href={guidePlatformDef.docsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 flex items-center gap-1.5 rounded-lg bg-primary/8 px-3 py-2 text-xs text-primary hover:bg-primary/12"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Read the official {guidePlatformDef.name} documentation
+              </a>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setGuidePlatform(null)}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (guidePlatform) {
+                  setGuidePlatform(null);
+                  openConnect(guidePlatform);
+                }
+              }}
+              className="gap-1.5"
+            >
+              <Plug className="h-4 w-4" />
+              Connect now
             </Button>
           </DialogFooter>
         </DialogContent>
