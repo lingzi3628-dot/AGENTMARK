@@ -3,29 +3,41 @@
 import { useEffect, useRef, useState } from "react";
 import { useStudio } from "@/lib/store";
 import { Icon } from "@/components/icon";
+import { Markdown } from "@/components/studio/markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Send, Square, Bot, User, Sparkles, Workflow, Play, ArrowLeft,
-  CheckCircle2, Loader2, AlertCircle, Cpu, Clock, Zap,
+  CheckCircle2, Loader2, AlertCircle, Clock, MessageSquare, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { ChatMessage, Agent } from "@/lib/types";
+import { formatDistanceToNow } from "date-fns";
+import type { ChatMessage, Agent, RunRecord } from "@/lib/types";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 export function RunView() {
-  const { activeAgent, agents, setActiveAgent, setView, messages, setMessages, addMessage, appendToMessage, finalizeMessage, isRunning, setRunning, runTrace, setRunTrace, addRun } = useStudio();
+  const { activeAgent, agents, setActiveAgent, setView, messages, setMessages, addMessage, appendToMessage, finalizeMessage, isRunning, setRunning, runTrace, setRunTrace, addRun, runs, setRuns } = useStudio();
   const [input, setInput] = useState("");
+  const [historyTab, setHistoryTab] = useState<"trace" | "history">("trace");
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, runTrace]);
+
+  // Load run history when an agent is selected
+  useEffect(() => {
+    if (!activeAgent) return;
+    fetch(`/api/agents/${activeAgent.id}/runs`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: RunRecord[]) => setRuns(data))
+      .catch(() => setRuns([]));
+     
+  }, [activeAgent?.id]);
 
   if (!activeAgent) {
     return <AgentPicker agents={agents} onPick={(a) => { setActiveAgent(a); }} onCreate={() => setView("studio")} />;
@@ -42,6 +54,7 @@ export function RunView() {
     addMessage(aiMsg);
     setRunning(true);
     setRunTrace([]);
+    setHistoryTab("trace");
 
     const history = messages
       .filter((m) => m.role !== "system" && !m.streaming)
@@ -100,11 +113,18 @@ export function RunView() {
       }
 
       finalizeMessage(aiMsg.id);
-      addRun({
+      // Persist the run to the database
+      const run: RunRecord = {
         id: uid(), agentId: activeAgent!.id, input: text,
         output: finalOutput, status: "completed", tokens, duration,
         createdAt: new Date().toISOString(),
-      });
+      };
+      addRun(run);
+      fetch(`/api/agents/${activeAgent!.id}/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(run),
+      }).catch(() => undefined);
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         finalizeMessage(aiMsg.id);
@@ -123,9 +143,17 @@ export function RunView() {
     abortRef.current?.abort();
   }
 
+  function loadHistoryRun(r: RunRecord) {
+    setMessages([
+      { id: uid(), role: "user", content: r.input },
+      { id: uid(), role: "assistant", content: r.output },
+    ]);
+    setHistoryTab("trace");
+  }
+
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* Sidebar: agent info + trace */}
+      {/* Sidebar: agent info + trace/history */}
       <aside className="hidden w-72 shrink-0 flex-col border-r border-border bg-card/40 lg:flex">
         <div className="border-b border-border p-4">
           <button onClick={() => setView("studio")} className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
@@ -142,40 +170,92 @@ export function RunView() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto studio-scroll p-4">
-          <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <Workflow className="h-3.5 w-3.5" /> Execution trace
-          </h4>
-          {runTrace.length === 0 && !isRunning ? (
-            <p className="text-xs text-muted-foreground">Send a message to see the agent execute its workflow.</p>
-          ) : (
-            <ol className="space-y-1.5">
-              {runTrace.map((t, i) => (
-                <li key={i} className="flex items-center gap-2 rounded-md border border-border bg-background p-2 text-xs">
-                  <TraceIcon status={t.status} />
-                  <span className="flex-1 truncate font-medium">{t.label}</span>
-                  <span className="text-[10px] uppercase text-muted-foreground">{t.status}</span>
-                </li>
-              ))}
-              {isRunning && (
-                <li className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-primary">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Executing…
-                </li>
+        {/* Tab switch */}
+        <div className="flex border-b border-border px-3 pt-2">
+          {(["trace", "history"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setHistoryTab(t)}
+              className={cn(
+                "flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium capitalize transition-colors",
+                historyTab === t
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
               )}
-            </ol>
-          )}
+            >
+              {t === "trace" ? <Workflow className="h-3.5 w-3.5" /> : <History className="h-3.5 w-3.5" />}
+              {t}
+              {t === "history" && runs.length > 0 && (
+                <span className="rounded-full bg-muted px-1.5 text-[10px]">{runs.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
 
-          <h4 className="mb-2 mt-6 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5" /> Workflow
-          </h4>
-          <div className="space-y-1">
-            {activeAgent.nodes.map((n) => (
-              <div key={n.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-[11px]">
-                <span className={cn("h-1.5 w-1.5 rounded-full", kindDot(n.data.kind))} />
-                <span className="truncate">{n.data.label || n.data.kind}</span>
+        <div className="flex-1 overflow-y-auto studio-scroll p-4">
+          {historyTab === "trace" ? (
+            <>
+              <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <Workflow className="h-3.5 w-3.5" /> Execution trace
+              </h4>
+              {runTrace.length === 0 && !isRunning ? (
+                <p className="text-xs text-muted-foreground">Send a message to see the agent execute its workflow.</p>
+              ) : (
+                <ol className="space-y-1.5">
+                  {runTrace.map((t, i) => (
+                    <li key={i} className="flex items-center gap-2 rounded-md border border-border bg-background p-2 text-xs">
+                      <TraceIcon status={t.status} />
+                      <span className="flex-1 truncate font-medium">{t.label}</span>
+                      <span className="text-[10px] uppercase text-muted-foreground">{t.status}</span>
+                    </li>
+                  ))}
+                  {isRunning && (
+                    <li className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-primary">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Executing…
+                    </li>
+                  )}
+                </ol>
+              )}
+
+              <h4 className="mb-2 mt-6 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5" /> Workflow
+              </h4>
+              <div className="space-y-1">
+                {activeAgent.nodes.map((n) => (
+                  <div key={n.id} className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-[11px]">
+                    <span className={cn("h-1.5 w-1.5 rounded-full", kindDot(n.data.kind))} />
+                    <span className="truncate">{n.data.label || n.data.kind}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <History className="h-3.5 w-3.5" /> Past runs
+              </h4>
+              {runs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No runs yet. Send a message to start.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {runs.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => loadHistoryRun(r)}
+                      className="block w-full rounded-md border border-border bg-background p-2 text-left transition-colors hover:border-primary/50 hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {formatDistanceToNow(new Date(r.createdAt), { addSuffix: true })}
+                        <span className="ml-auto">{r.tokens} tok</span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-xs">{r.input}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </aside>
 
@@ -261,7 +341,11 @@ function MessageBubble({ m }: { m: ChatMessage }) {
       </div>
       <div className={cn("max-w-[85%] rounded-2xl px-4 py-2.5 text-sm", isUser ? "bg-primary text-primary-foreground" : "bg-card border border-border")}>
         {m.content ? (
-          <div className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</div>
+          isUser ? (
+            <div className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</div>
+          ) : (
+            <Markdown content={m.content} />
+          )
         ) : m.streaming ? (
           <div className="flex items-center gap-1.5 py-1 text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
@@ -288,6 +372,8 @@ function kindDot(kind: string): string {
     case "model": return "bg-primary";
     case "tool": return "bg-amber-500";
     case "knowledge": return "bg-violet-500";
+    case "image-gen": return "bg-pink-500";
+    case "vision": return "bg-cyan-500";
     case "output": return "bg-rose-500";
     default: return "bg-muted-foreground";
   }
@@ -342,3 +428,6 @@ function AgentPicker({ agents, onPick, onCreate }: { agents: Agent[]; onPick: (a
     </div>
   );
 }
+
+// Keep MessageSquare import used for tree-shaking clarity
+void MessageSquare;

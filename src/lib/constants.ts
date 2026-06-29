@@ -52,6 +52,7 @@ export interface ToolDef {
 
 export const TOOLS: ToolDef[] = [
   { id: "web-search", name: "Web Search", description: "Retrieve live information from the web.", icon: "globe" },
+  { id: "page-reader", name: "Page Reader", description: "Fetch and extract clean content from a URL.", icon: "link" },
   { id: "summarize", name: "Summarize", description: "Condense long content into concise summaries.", icon: "file-text" },
   { id: "translate", name: "Translate", description: "Translate text between languages.", icon: "languages" },
   { id: "code", name: "Code Generator", description: "Generate, explain, and refactor code.", icon: "code" },
@@ -63,7 +64,17 @@ export const NODE_PALETTE = [
   { kind: "model", label: "Language Model", icon: "sparkles", desc: "Generates text with an LLM" },
   { kind: "tool", label: "Tool", icon: "wrench", desc: "Runs an action like search or summarize" },
   { kind: "knowledge", label: "Knowledge", icon: "database", desc: "Injects documents as context" },
+  { kind: "image-gen", label: "Image Generator", icon: "image", desc: "Creates images from a text prompt" },
+  { kind: "vision", label: "Vision", icon: "eye", desc: "Understands images with GLM-4.5V" },
   { kind: "output", label: "Output", icon: "flag", desc: "Returns the final result" },
+] as const;
+
+export const IMAGE_SIZES = [
+  { id: "1024x1024", label: "Square 1024×1024" },
+  { id: "1344x768", label: "Landscape 1344×768" },
+  { id: "768x1344", label: "Portrait 768×1344" },
+  { id: "1152x864", label: "Landscape 1152×864" },
+  { id: "864x1152", label: "Portrait 864×1152" },
 ] as const;
 
 export const AGENT_ICONS = [

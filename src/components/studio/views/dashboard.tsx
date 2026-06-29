@@ -1,24 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudio } from "@/lib/store";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus, Workflow, Play, Pin, Trash2, Sparkles, Clock,
-  ArrowRight, Search, Zap, type LucideIcon,
+  ArrowRight, Search, Zap, Copy, Download, Upload,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Agent } from "@/lib/types";
+import type { Agent, WorkflowNode, WorkflowEdge } from "@/lib/types";
+import { CATEGORIES } from "@/lib/constants";
 import { formatDistanceToNow } from "date-fns";
+
+type SortKey = "recent" | "name-asc" | "name-desc" | "nodes-desc";
 
 export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
   const { agents, setAgents, upsertAgent, removeAgent, setActiveAgent, setView } = useStudio();
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("recent");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -29,13 +43,30 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [setAgents]);
 
-  const filtered = agents.filter(
-    (a) =>
-      a.name.toLowerCase().includes(query.toLowerCase()) ||
-      a.description.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = agents
+    .filter((a) => {
+      const q = query.toLowerCase();
+      const matchesQuery =
+        a.name.toLowerCase().includes(q) ||
+        a.description.toLowerCase().includes(q);
+      const matchesCategory = category === "all" || a.category === category;
+      return matchesQuery && matchesCategory;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "nodes-desc":
+          return b.nodes.length - a.nodes.length;
+        case "recent":
+        default:
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+    });
 
   async function createBlank() {
     try {
@@ -52,6 +83,98 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
       toast.success("New agent created", { description: "Open the Studio to design its workflow." });
     } catch {
       toast.error("Could not create agent");
+    }
+  }
+
+  async function duplicate(a: Agent) {
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: `${a.name} (copy)`,
+          description: a.description,
+          icon: a.icon,
+          category: a.category,
+          nodes: a.nodes,
+          edges: a.edges,
+        }),
+      });
+      if (!res.ok) throw new Error("duplicate failed");
+      const created = (await res.json()) as Agent;
+      upsertAgent(created);
+      toast.success("Agent duplicated");
+    } catch {
+      toast.error("Could not duplicate agent");
+    }
+  }
+
+  function exportAgent(a: Agent) {
+    try {
+      const payload = {
+        name: a.name,
+        description: a.description,
+        icon: a.icon,
+        category: a.category,
+        nodes: a.nodes,
+        edges: a.edges,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${a.name.toLowerCase().replace(/\s+/g, "-")}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      toast.success("Agent exported");
+    } catch {
+      toast.error("Could not export agent");
+    }
+  }
+
+  async function importAgent(file: File) {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text) as Partial<{
+        name: unknown;
+        description: unknown;
+        icon: unknown;
+        category: unknown;
+        nodes: unknown;
+        edges: unknown;
+      }>;
+      if (
+        typeof data.name !== "string" ||
+        !Array.isArray(data.nodes) ||
+        !Array.isArray(data.edges)
+      ) {
+        toast.error("Invalid agent file — missing name, nodes, or edges");
+        return;
+      }
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          description: typeof data.description === "string" ? data.description : "",
+          icon: typeof data.icon === "string" ? data.icon : "sparkles",
+          category: typeof data.category === "string" ? data.category : "custom",
+          nodes: data.nodes as WorkflowNode[],
+          edges: data.edges as WorkflowEdge[],
+        }),
+      });
+      if (!res.ok) throw new Error("import failed");
+      const created = (await res.json()) as Agent;
+      upsertAgent(created);
+      toast.success("Agent imported");
+    } catch {
+      toast.error("Could not import agent");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -91,6 +214,18 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
 
   return (
     <div className="flex-1 overflow-y-auto studio-scroll p-4 lg:p-6">
+      {/* Hidden file input for JSON import — single instance, always mounted */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void importAgent(file);
+        }}
+      />
+
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -126,19 +261,57 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
           </div>
         </Card>
 
-        {/* Search */}
+        {/* Search + filters */}
         {agents.length > 0 && (
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search agents…"
+                aria-label="Search agents"
                 className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
-            <span className="text-xs text-muted-foreground">{filtered.length} of {agents.length}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger size="sm" className="w-[150px]" aria-label="Filter by category">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c.charAt(0).toUpperCase() + c.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                <SelectTrigger size="sm" className="w-[140px]" aria-label="Sort agents">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Recent</SelectItem>
+                  <SelectItem value="name-asc">Name A-Z</SelectItem>
+                  <SelectItem value="name-desc">Name Z-A</SelectItem>
+                  <SelectItem value="nodes-desc">Most nodes</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Import agent from JSON"
+              >
+                <Upload className="h-4 w-4" /> Import
+              </Button>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {filtered.length} of {agents.length}
+              </span>
+            </div>
           </div>
         )}
 
@@ -160,11 +333,18 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
             <div>
               <h3 className="font-semibold">No agents yet</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Create a blank agent or start from a template.
+                Create a blank agent, start from a template, or import one.
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               <Button variant="outline" onClick={() => setView("templates")}>Templates</Button>
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" /> Import
+              </Button>
               <Button onClick={createBlank} className="gap-1.5">
                 <Plus className="h-4 w-4" /> Create agent
               </Button>
@@ -180,7 +360,16 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {pinned.map((a) => (
-                <AgentCard key={a.id} a={a} onOpen={() => open(a)} onRun={() => run(a)} onPin={() => togglePin(a)} onDelete={() => deleteAgent(a)} />
+                <AgentCard
+                  key={a.id}
+                  a={a}
+                  onOpen={() => open(a)}
+                  onRun={() => run(a)}
+                  onPin={() => togglePin(a)}
+                  onDuplicate={() => duplicate(a)}
+                  onExport={() => exportAgent(a)}
+                  onDelete={() => deleteAgent(a)}
+                />
               ))}
             </div>
           </section>
@@ -194,10 +383,42 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {others.map((a) => (
-                <AgentCard key={a.id} a={a} onOpen={() => open(a)} onRun={() => run(a)} onPin={() => togglePin(a)} onDelete={() => deleteAgent(a)} />
+                <AgentCard
+                  key={a.id}
+                  a={a}
+                  onOpen={() => open(a)}
+                  onRun={() => run(a)}
+                  onPin={() => togglePin(a)}
+                  onDuplicate={() => duplicate(a)}
+                  onExport={() => exportAgent(a)}
+                  onDelete={() => deleteAgent(a)}
+                />
               ))}
             </div>
           </section>
+        )}
+
+        {/* No results */}
+        {!loading && agents.length > 0 && filtered.length === 0 && (
+          <Card className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+            <Search className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm font-medium">No agents match your filters</p>
+            <p className="text-xs text-muted-foreground">
+              Try a different search, category, or sort.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1"
+              onClick={() => {
+                setQuery("");
+                setCategory("all");
+                setSortBy("recent");
+              }}
+            >
+              Clear filters
+            </Button>
+          </Card>
         )}
       </div>
     </div>
@@ -224,18 +445,24 @@ function StatCard({ icon: IconCmp, label, value, accent }: { icon: LucideIcon; l
 }
 
 function AgentCard({
-  a, onOpen, onRun, onPin, onDelete,
+  a, onOpen, onRun, onPin, onDuplicate, onExport, onDelete,
 }: {
   a: Agent;
   onOpen: () => void;
   onRun: () => void;
   onPin: () => void;
+  onDuplicate: () => void;
+  onExport: () => void;
   onDelete: () => void;
 }) {
   return (
     <Card className="group flex flex-col gap-3 p-5 transition-all hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
       <div className="flex items-start gap-3">
-        <button onClick={onOpen} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary transition-transform group-hover:scale-105">
+        <button
+          onClick={onOpen}
+          aria-label={`Open ${a.name}`}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary transition-transform group-hover:scale-105"
+        >
           <Icon name={a.icon} className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
@@ -267,10 +494,40 @@ function AgentCard({
           Edit <ArrowRight className="h-3.5 w-3.5" />
         </Button>
         <div className="ml-auto flex items-center gap-0.5">
-          <Button size="icon" variant="ghost" className={cn("h-8 w-8", a.pinned && "text-primary")} onClick={onPin} aria-label="Pin">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={onDuplicate}
+            aria-label="Duplicate agent"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={onExport}
+            aria-label="Export agent as JSON"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className={cn("h-8 w-8", a.pinned && "text-primary")}
+            onClick={onPin}
+            aria-label={a.pinned ? "Unpin agent" : "Pin agent"}
+          >
             <Pin className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onDelete} aria-label="Delete">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+            aria-label="Delete agent"
+          >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>

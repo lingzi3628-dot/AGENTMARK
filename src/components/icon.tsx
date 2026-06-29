@@ -3,7 +3,7 @@
 import {
   Sparkles, Bot, Brain, Code, PenTool, Search, FileText, Languages,
   Database, Rocket, Lightbulb, Wand2, Play, Wrench, Flag, Globe,
-  Tags, type LucideIcon,
+  Tags, Image, Eye, Link, type LucideIcon,
 } from "lucide-react";
 
 const MAP: Record<string, LucideIcon> = {
@@ -24,6 +24,9 @@ const MAP: Record<string, LucideIcon> = {
   flag: Flag,
   globe: Globe,
   tags: Tags,
+  image: Image,
+  eye: Eye,
+  link: Link,
 };
 
 export function Icon({

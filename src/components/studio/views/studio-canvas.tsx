@@ -88,6 +88,8 @@ function StudioInner() {
       model: { label: "GLM Model", provider: "glm-4.5-air", systemPrompt: "You are a helpful AI agent. Respond clearly and concisely." },
       tool: { label: "Tool", tool: "web-search" },
       knowledge: { label: "Knowledge", content: "" },
+      "image-gen": { label: "Image Gen", imageSize: "1024x1024" },
+      vision: { label: "Vision", imageUrl: undefined },
       output: { label: "Output" },
     };
     const pos = position ?? { x: 120 + Math.random() * 80, y: 160 + Math.random() * 120 };

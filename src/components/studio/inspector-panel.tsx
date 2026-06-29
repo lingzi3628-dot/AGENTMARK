@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useStudio } from "@/lib/store";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
@@ -11,21 +12,33 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
-import { Trash2, X, Settings2 } from "lucide-react";
-import { MODELS, TOOLS } from "@/lib/constants";
-import type { NodeKind } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, X, Settings2, Cpu, Upload, Link2 } from "lucide-react";
+import { MODELS, TOOLS, IMAGE_SIZES } from "@/lib/constants";
+import { estimateNodeTokens, formatTokens } from "@/lib/tokens";
+import type { NodeKind, KnowledgeItem } from "@/lib/types";
 
 const KIND_LABEL: Record<NodeKind, string> = {
   trigger: "Trigger Node",
   model: "Language Model Node",
   tool: "Tool Node",
   knowledge: "Knowledge Node",
+  "image-gen": "Image Generator Node",
+  vision: "Vision Node",
   output: "Output Node",
 };
 
 export function InspectorPanel() {
   const { nodes, selectedNodeId, setSelectedNode, updateNodeData, removeNode } = useStudio();
   const node = nodes.find((n) => n.id === selectedNodeId);
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+
+  useEffect(() => {
+    fetch("/api/knowledge")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setKnowledge)
+      .catch(() => setKnowledge([]));
+  }, [selectedNodeId]);
 
   if (!node) {
     return (
@@ -42,6 +55,30 @@ export function InspectorPanel() {
   }
 
   const d = node.data;
+  const tokenEst = estimateNodeTokens(d);
+
+  const linkedKnowledge = knowledge.filter((k) => d.knowledgeIds?.includes(k.id));
+
+  function toggleKnowledge(id: string) {
+    const current = d.knowledgeIds ?? [];
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    // Merge content from linked items into the node content for execution.
+    const merged = knowledge
+      .filter((k) => next.includes(k.id))
+      .map((k) => `# ${k.title}\n${k.content}`)
+      .join("\n\n---\n\n");
+    updateNodeData(node.id, { knowledgeIds: next, content: merged });
+  }
+
+  function onImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateNodeData(node.id, { imageUrl: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  }
 
   return (
     <div className="flex h-full w-80 flex-col border-l border-border bg-card">
@@ -141,26 +178,131 @@ export function InspectorPanel() {
             <p className="rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
               {TOOLS.find((t) => t.id === (d.tool ?? "web-search"))?.description}
             </p>
+            {(d.tool === "web-search" || d.tool === "page-reader") && (
+              <p className="rounded-md bg-primary/8 p-2 text-[11px] text-primary">
+                {d.tool === "page-reader"
+                  ? "Feed a URL into this node (e.g. from a trigger) — it extracts clean readable content."
+                  : "Uses the upstream text as a search query and returns live results."}
+              </p>
+            )}
           </div>
         )}
 
         {d.kind === "knowledge" && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Content</Label>
+          <div className="space-y-2">
+            <Label className="text-xs">Link knowledge items</Label>
+            {knowledge.length === 0 ? (
+              <p className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
+                No knowledge items yet. Add some in the Knowledge tab.
+              </p>
+            ) : (
+              <div className="max-h-40 space-y-1 overflow-y-auto studio-scroll">
+                {knowledge.map((k) => {
+                  const linked = d.knowledgeIds?.includes(k.id);
+                  return (
+                    <button
+                      key={k.id}
+                      onClick={() => toggleKnowledge(k.id)}
+                      className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
+                        linked ? "border-primary/50 bg-primary/10" : "border-border hover:bg-accent"
+                      }`}
+                    >
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${linked ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                      <span className="truncate">{k.title}</span>
+                      {linked && <Badge variant="default" className="ml-auto h-4 px-1 text-[9px]">linked</Badge>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <Label className="text-xs pt-1">Or paste raw content</Label>
             <Textarea
               value={d.content ?? ""}
-              onChange={(e) => updateNodeData(node.id, { content: e.target.value })}
+              onChange={(e) => updateNodeData(node.id, { content: e.target.value, knowledgeIds: [] })}
               placeholder="Paste documents, context, or reference text…"
-              rows={8}
+              rows={5}
               className="text-sm"
             />
+            {linkedKnowledge.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {linkedKnowledge.length} item{linkedKnowledge.length > 1 ? "s" : ""} linked · {formatTokens(linkedKnowledge.reduce((s, k) => s + k.content.length, 0) / 4)} tokens
+              </p>
+            )}
+          </div>
+        )}
+
+        {d.kind === "image-gen" && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Image size</Label>
+              <Select value={d.imageSize ?? "1024x1024"} onValueChange={(v) => updateNodeData(node.id, { imageSize: v as typeof d.imageSize })}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {IMAGE_SIZES.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
+              Connect a trigger or model into this node — its output becomes the image prompt. The generated image is returned to the chat.
+            </p>
+          </div>
+        )}
+
+        {d.kind === "vision" && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Attach an image</Label>
+              {d.imageUrl ? (
+                <div className="relative overflow-hidden rounded-md border border-border">
+                  { }
+                  <img src={d.imageUrl} alt="attached" className="max-h-40 w-full object-contain bg-muted/30" />
+                  <Button
+                    size="icon" variant="destructive" className="absolute right-1 top-1 h-6 w-6"
+                    onClick={() => updateNodeData(node.id, { imageUrl: undefined })}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent">
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Click to upload an image</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={onImageUpload} />
+                </label>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Or paste an image URL</Label>
+              <div className="relative">
+                <Link2 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={d.imageUrl?.startsWith("data:") ? "" : (d.imageUrl ?? "")}
+                  onChange={(e) => updateNodeData(node.id, { imageUrl: e.target.value })}
+                  placeholder="https://…"
+                  className="h-8 pl-8 text-sm"
+                />
+              </div>
+            </div>
+            <p className="rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
+              Uses GLM-4.5V to analyse the attached image. Connect an upstream node for the question, or type one in the trigger.
+            </p>
           </div>
         )}
 
         {d.kind === "output" && (
           <p className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-            The output node returns the final result of the workflow. Connect a model or tool node into it.
+            The output node returns the final result of the workflow. Connect a model, tool, image-gen, or vision node into it.
           </p>
+        )}
+
+        {/* Token estimate */}
+        {tokenEst > 0 && (
+          <div className="flex items-center gap-1.5 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            <Cpu className="h-3.5 w-3.5" />
+            Est. <span className="font-medium text-foreground">{formatTokens(tokenEst)}</span> tokens / run
+          </div>
         )}
       </div>
 
@@ -184,6 +326,8 @@ function iconFor(kind: NodeKind): string {
     case "model": return "sparkles";
     case "tool": return "wrench";
     case "knowledge": return "database";
+    case "image-gen": return "image";
+    case "vision": return "eye";
     case "output": return "flag";
   }
 }

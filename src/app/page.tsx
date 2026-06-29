@@ -9,6 +9,7 @@ import { StudioCanvas } from "@/components/studio/views/studio-canvas";
 import { RunView } from "@/components/studio/views/run-view";
 import { TemplatesView } from "@/components/studio/views/templates-view";
 import { KnowledgeView } from "@/components/studio/views/knowledge-view";
+import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import type { Agent, Template, KnowledgeItem } from "@/lib/types";
 
@@ -69,6 +70,7 @@ export default function Home() {
         </main>
         <StudioFooter />
       </div>
+      <OnboardingTour />
     </div>
   );
 }
