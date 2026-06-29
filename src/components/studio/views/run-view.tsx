@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useStudio } from "@/lib/store";
+import { useAuth } from "@/lib/auth-store";
 import { Icon } from "@/components/icon";
 import { Markdown } from "@/components/studio/markdown";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 export function RunView() {
   const { activeAgent, agents, setActiveAgent, setView, messages, setMessages, addMessage, appendToMessage, finalizeMessage, isRunning, setRunning, runTrace, setRunTrace, addRun, runs, setRuns } = useStudio();
+  const { user } = useAuth();
   const [input, setInput] = useState("");
   const [historyTab, setHistoryTab] = useState<"trace" | "history">("trace");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -68,7 +70,7 @@ export function RunView() {
       const res = await fetch(`/api/agents/${activeAgent!.id}/run`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input: text, history }),
+        body: JSON.stringify({ input: text, history, firebaseUid: user?.firebaseUid }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) throw new Error("Run failed");

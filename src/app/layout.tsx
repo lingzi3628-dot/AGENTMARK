@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { StudioToaster } from "@/components/studio/studio-toaster";
@@ -14,16 +14,38 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Giselle Studio — Visual AI Agent Builder",
+  title: "AGENTMARK — Visual AI Agent Builder",
   description:
-    "An open-source-inspired AI agent studio for designing and running agentic workflows. Drag, connect, and compose multi-model agents visually.",
+    "Build, run & ship AI agents on a visual canvas. Drag, connect, and compose multi-model agentic workflows.",
   keywords: [
-    "Giselle", "AI agent", "agentic workflows", "visual builder",
-    "LLM", "multi-model", "Next.js",
+    "AGENTMARK", "AI agent", "agentic workflows", "visual builder",
+    "LLM", "multi-model", "Next.js", "PWA",
   ],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "AGENTMARK",
   },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
+  },
+  openGraph: {
+    title: "AGENTMARK",
+    description: "Build, run & ship AI agents on a visual canvas.",
+    type: "website",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#34d399",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

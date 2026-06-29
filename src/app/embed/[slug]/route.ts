@@ -72,7 +72,7 @@ body{background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-directi
   <textarea id="input" placeholder="Message ${name}…" rows="1"></textarea>
   <button class="send" id="send">➤</button>
 </div>
-<div class="footer">Powered by <a href="https://github.com/giselles-ai/giselle" target="_blank" rel="noreferrer">Giselle Studio</a></div>
+<div class="footer">Powered by <a href="" target="_blank" rel="noreferrer">AGENTMARK</a></div>
 <script>
 (function(){
   var SLUG = ${slugJson};

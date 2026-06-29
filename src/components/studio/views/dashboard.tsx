@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useStudio } from "@/lib/store";
+import { useAuth } from "@/lib/auth-store";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,7 @@ type SortKey = "recent" | "name-asc" | "name-desc" | "nodes-desc";
 
 export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
   const { agents, setAgents, upsertAgent, removeAgent, setActiveAgent, setView } = useStudio();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -73,7 +75,7 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "Untitled Agent", description: "" }),
+        body: JSON.stringify({ name: "Untitled Agent", description: "", firebaseUid: user?.firebaseUid }),
       });
       if (!res.ok) throw new Error("create failed");
       const agent = (await res.json()) as Agent;
@@ -98,6 +100,7 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
           category: a.category,
           nodes: a.nodes,
           edges: a.edges,
+          firebaseUid: user?.firebaseUid,
         }),
       });
       if (!res.ok) throw new Error("duplicate failed");
@@ -165,6 +168,7 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
           category: typeof data.category === "string" ? data.category : "custom",
           nodes: data.nodes as WorkflowNode[],
           edges: data.edges as WorkflowEdge[],
+          firebaseUid: user?.firebaseUid,
         }),
       });
       if (!res.ok) throw new Error("import failed");

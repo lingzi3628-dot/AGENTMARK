@@ -104,7 +104,7 @@ function StudioInner() {
   }
 
   const onDragStart = (e: React.DragEvent, kind: NodeKind) => {
-    e.dataTransfer.setData("application/giselle-kind", kind);
+    e.dataTransfer.setData("application/agentmark-kind", kind);
     e.dataTransfer.effectAllowed = "move";
   };
 
@@ -115,7 +115,7 @@ function StudioInner() {
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const kind = e.dataTransfer.getData("application/giselle-kind") as NodeKind;
+    const kind = e.dataTransfer.getData("application/agentmark-kind") as NodeKind;
     if (!kind) return;
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     addNode(kind, position);

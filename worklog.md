@@ -180,3 +180,24 @@ Work Log:
 
 Stage Summary:
 - All requested features shipped: embed agents on websites (working widget + script/iframe/React code), connect to 9 platforms (Facebook, WhatsApp, Telegram, Slack, Discord, Email, SMS, Web, API), 4 new node types (Router, Memory, HTTP Request, TTS), 4 new templates. Dev server running.
+
+---
+Task ID: P1-P6
+Agent: main
+Task: Rebrand AGENTMARK + PWA + Firebase Google login + Settings/BYOK + AI Builder + Token limits
+
+Work Log:
+- Rebranded all "Giselle Studio" → "AGENTMARK", removed "Inspired by giselles-ai" watermarks and GitHub links from footer + sidebar.
+- PWA: generated icon-192.png + icon-512.png via image generation, created manifest.json, updated layout.tsx with manifest + appleWebApp + themeColor + viewport.
+- Firebase: installed firebase@12.15.0, created src/lib/firebase.ts (Google sign-in with popup+redirect fallback), src/lib/auth-store.ts (Zustand), AuthProvider component, LoginScreen with Google button.
+- Prisma: added User model (firebaseUid, email, plan, dailyTokenLimit, maxAgents, tokensUsedToday, BYOK keys: glmApiKey/openaiApiKey/anthropicApiKey, Supabase: supabaseUrl/supabaseAnonKey/supabaseServiceKey), UsageRecord model with @@unique([userId,date]), linked Agent.userId + RunHistory.userId. Pushed schema.
+- APIs: /api/auth/sync (POST — creates/updates user from Firebase uid), /api/auth/me (GET current user + PATCH update keys/supabase/plan), /api/agents/generate (POST — AI generates full node graph from natural language description via GLM-4.6), updated /api/agents POST (max agents limit check), /api/agents/[id]/run (token tracking — increments user.tokensUsedToday + UsageRecord after run, 429 if limit exceeded).
+- Views: SettingsView (profile header with avatar, usage bars for tokens+agents with warnings, BYOK API key fields with masking, Supabase connection fields, sign-out, idle agent cleanup button). AIBuilderModal (Choose: "Describe an Idea" vs "Create from Scratch" — describe mode sends to /api/agents/generate, creates agent + opens Studio).
+- Topbar: replaced "New Agent" direct-create with AIBuilderModal trigger, added user avatar (click → settings).
+- Sidebar: replaced GitHub link with Settings button.
+- Updated page.tsx: wrapped in AuthProvider, shows LoginScreen when !user, loading spinner while auth resolves, bootstraps data only when authenticated.
+- Updated dashboard + run-view + ai-builder-modal to pass firebaseUid for token/limit tracking.
+- Lint: 0 errors, 0 warnings.
+
+Stage Summary:
+- All 6 upgrade areas shipped: rebrand+PWA, Firebase Google login, Settings/Profile with BYOK+Supabase, AI Agent Builder (describe→generate), token accounting with daily limits + max agents + auto-delete idle. Dev server needs restart + verification.

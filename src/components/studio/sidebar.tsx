@@ -5,7 +5,7 @@ import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
-  Sparkles, Github, ChevronRight, X, Plug,
+  Sparkles, ChevronRight, X, Plug, Settings,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -24,7 +24,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
@@ -44,7 +43,7 @@ export function Sidebar() {
             <Sparkles className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <div className="text-sm font-semibold leading-tight">Giselle Studio</div>
+            <div className="text-sm font-semibold leading-tight">AGENTMARK</div>
             <div className="text-[11px] text-muted-foreground">AI Agent Workflows</div>
           </div>
           <button
@@ -82,7 +81,6 @@ export function Sidebar() {
             );
           })}
 
-          {/* Active agent chip */}
           {activeAgent && (
             <>
               <div className="px-2 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -104,7 +102,6 @@ export function Sidebar() {
             </>
           )}
 
-          {/* Recent agents */}
           {agents.length > 0 && (
             <>
               <div className="px-2 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -129,18 +126,21 @@ export function Sidebar() {
           )}
         </nav>
 
-        {/* Footer */}
+        {/* Settings / Profile */}
         <div className="border-t border-sidebar-border p-3">
-          <a
-            href="https://github.com/giselles-ai/giselle"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          <button
+            onClick={() => setView("settings")}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors",
+              view === "settings"
+                ? "bg-primary/12 text-primary"
+                : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            )}
           >
-            <Github className="h-4 w-4" />
-            <span className="flex-1">Inspired by giselles-ai</span>
+            <Settings className="h-4 w-4" />
+            <span className="flex-1 text-left">Settings & Profile</span>
             <ChevronRight className="h-3 w-3" />
-          </a>
+          </button>
         </div>
       </aside>
     </>

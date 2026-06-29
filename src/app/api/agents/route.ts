@@ -22,6 +22,23 @@ export async function POST(req: NextRequest) {
   const nodes: WorkflowNode[] = body.nodes ?? defaultNodes();
   const edges: WorkflowEdge[] = body.edges ?? defaultEdges();
 
+  // Check max agents limit if user is authenticated
+  const firebaseUid = body.firebaseUid as string | undefined;
+  let userId: string | undefined;
+  if (firebaseUid) {
+    const user = await db.user.findUnique({ where: { firebaseUid } });
+    if (user) {
+      userId = user.id;
+      const count = await db.agent.count({ where: { userId } });
+      if (count >= user.maxAgents) {
+        return NextResponse.json(
+          { error: `Agent limit reached (${user.maxAgents}). Delete unused agents or upgrade your plan.` },
+          { status: 429 },
+        );
+      }
+    }
+  }
+
   // Optionally seed from a template
   const templateId = body.templateId as string | undefined;
   let tplNodes = nodes;
@@ -46,6 +63,7 @@ export async function POST(req: NextRequest) {
       category,
       nodes: JSON.stringify(tplNodes),
       edges: JSON.stringify(tplEdges),
+      ...(userId ? { userId } : {}),
     },
   });
   return NextResponse.json(toAgent(created), { status: 201 });

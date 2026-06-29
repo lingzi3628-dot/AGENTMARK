@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { AuthProvider } from "@/components/studio/auth-provider";
+import { LoginScreen } from "@/components/studio/login-screen";
 import { Sidebar } from "@/components/studio/sidebar";
 import { Topbar } from "@/components/studio/topbar";
 import { StudioFooter } from "@/components/studio/footer";
@@ -11,12 +13,15 @@ import { TemplatesView } from "@/components/studio/views/templates-view";
 import { KnowledgeView } from "@/components/studio/views/knowledge-view";
 import { PublishView } from "@/components/studio/views/publish-view";
 import { IntegrationsView } from "@/components/studio/views/integrations-view";
+import { SettingsView } from "@/components/studio/views/settings-view";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
+import { useAuth } from "@/lib/auth-store";
 import type { Agent, Template, KnowledgeItem } from "@/lib/types";
 
 export default function Home() {
-  const { view, theme, setAgents, setView } = useStudio();
+  const { view, theme, setAgents } = useStudio();
+  const { user, loading } = useAuth();
 
   // Apply theme class to <html>
   useEffect(() => {
@@ -24,8 +29,9 @@ export default function Home() {
     root.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
-  // Bootstrap data
+  // Bootstrap data (only when authenticated)
   useEffect(() => {
+    if (!user) return;
     let cancelled = false;
     (async () => {
       try {
@@ -41,8 +47,6 @@ export default function Home() {
         }
         if (templatesRes.ok) {
           const data = (await templatesRes.json()) as Template[];
-          useStudio.getState().setAgents(useStudio.getState().agents); // no-op keep
-          // store templates in a module-level cache via window
           (window as unknown as { __templates?: Template[] }).__templates = data;
         }
         if (knowledgeRes.ok) {
@@ -50,31 +54,42 @@ export default function Home() {
           (window as unknown as { __knowledge?: KnowledgeItem[] }).__knowledge = data;
         }
       } catch {
-        // network errors are non-fatal for render
+        // non-fatal
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user, setAgents]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex min-h-screen flex-col lg:pl-64">
-        <Topbar />
-        <main className="flex flex-1 flex-col overflow-hidden">
-          {view === "dashboard" && <DashboardView onOpenStudio={() => setView("studio")} />}
-          {view === "studio" && <StudioCanvas />}
-          {view === "run" && <RunView />}
-          {view === "templates" && <TemplatesView />}
-          {view === "knowledge" && <KnowledgeView />}
-          {view === "publish" && <PublishView />}
-          {view === "integrations" && <IntegrationsView />}
-        </main>
-        <StudioFooter />
-      </div>
-      <OnboardingTour />
-    </div>
+    <AuthProvider>
+      {loading ? (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="flex h-12 w-12 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : !user ? (
+        <LoginScreen />
+      ) : (
+        <div className="min-h-screen bg-background">
+          <Sidebar />
+          <div className="flex min-h-screen flex-col lg:pl-64">
+            <Topbar />
+            <main className="flex flex-1 flex-col overflow-hidden">
+              {view === "dashboard" && <DashboardView onOpenStudio={() => useStudio.getState().setView("studio")} />}
+              {view === "studio" && <StudioCanvas />}
+              {view === "run" && <RunView />}
+              {view === "templates" && <TemplatesView />}
+              {view === "knowledge" && <KnowledgeView />}
+              {view === "publish" && <PublishView />}
+              {view === "integrations" && <IntegrationsView />}
+              {view === "settings" && <SettingsView />}
+            </main>
+            <StudioFooter />
+          </div>
+          <OnboardingTour />
+        </div>
+      )}
+    </AuthProvider>
   );
 }

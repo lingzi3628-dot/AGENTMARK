@@ -6,7 +6,7 @@ import { Sparkles, ArrowLeft, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const STORAGE_KEY = "giselle.onboarded";
+const STORAGE_KEY = "agentmark.onboarded";
 const TOTAL_STEPS = 5;
 
 // Read localStorage via useSyncExternalStore so the initial render matches
@@ -58,12 +58,12 @@ const GUIDES: Record<"build" | "run" | "templates", GuideContent> = {
 /**
  * OnboardingTour
  *
- * A self-contained, first-visit guided tour of Giselle Studio.
+ * A self-contained, first-visit guided tour of AGENTMARK.
  * - Step 1: welcome modal (centered, with backdrop)
  * - Steps 2-4: floating guide cards pointing at sidebar nav items
  * - Step 5: "You're all set" modal (centered, with backdrop)
  *
- * Persists dismissal via localStorage("giselle.onboarded").
+ * Persists dismissal via localStorage("agentmark.onboarded").
  * Renders null on every subsequent visit.
  */
 export function OnboardingTour() {
@@ -139,7 +139,7 @@ export function OnboardingTour() {
                 id="onboarding-welcome-title"
                 className="text-xl font-semibold tracking-tight"
               >
-                Welcome to Giselle Studio
+                Welcome to AGENTMARK
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 Design, run, and ship multi-model AI agents on a visual canvas.

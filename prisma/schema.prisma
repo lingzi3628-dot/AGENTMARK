@@ -1,4 +1,4 @@
-// Giselle-inspired AI Agent Studio schema
+// AGENTMARK — AI Agent Studio schema
 
 generator client {
   provider = "prisma-client-js"
@@ -9,14 +9,44 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id              String   @id @default(cuid())
+  firebaseUid     String   @unique
+  email           String   @unique
+  name            String   @default("")
+  photoURL        String   @default("")
+  plan            String   @default("free") // free | pro | enterprise
+  // BYOK: bring your own API keys (encrypted at rest in a real app)
+  glmApiKey       String   @default("")
+  openaiApiKey    String   @default("")
+  anthropicApiKey String   @default("")
+  // Supabase connection for heavy projects
+  supabaseUrl     String   @default("")
+  supabaseAnonKey String   @default("")
+  supabaseServiceKey String @default("")
+  // limits
+  dailyTokenLimit Int      @default(100000)
+  maxAgents       Int      @default(10)
+  // token accounting (reset daily)
+  tokensUsedToday Int      @default(0)
+  tokenResetDate  String   @default("") // YYYY-MM-DD
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  agents          Agent[]
+  runs            RunHistory[]
+  usageRecords    UsageRecord[]
+}
+
 model Agent {
   id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   description String   @default("")
   icon        String   @default("sparkles")
   category    String   @default("custom")
-  nodes       String   @default("[]") // JSON: WorkflowNode[]
-  edges       String   @default("[]") // JSON: WorkflowEdge[]
+  nodes       String   @default("[]")
+  edges       String   @default("[]")
   pinned      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -30,12 +60,26 @@ model RunHistory {
   id        String   @id @default(cuid())
   agentId   String
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   input     String   @default("")
   output    String   @default("")
-  status    String   @default("completed") // running | completed | error
+  status    String   @default("completed")
   tokens    Int      @default(0)
-  duration  Int      @default(0) // ms
+  duration  Int      @default(0)
   createdAt DateTime @default(now())
+}
+
+model UsageRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  tokens    Int      @default(0)
+  runs      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
 }
 
 model KnowledgeItem {
@@ -44,7 +88,7 @@ model KnowledgeItem {
   agent     Agent?   @relation(fields: [agentId], references: [id], onDelete: Cascade)
   title     String
   content   String   @default("")
-  type      String   @default("text") // text | file | url
+  type      String   @default("text")
   source    String   @default("")
   createdAt DateTime @default(now())
 }
@@ -76,8 +120,8 @@ model Integration {
   id        String   @id @default(cuid())
   agentId   String
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  platform  String   // facebook | whatsapp | telegram | slack | discord | email | sms | api | web
-  config    String   @default("{}") // JSON: platform-specific config
+  platform  String
+  config    String   @default("{}")
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

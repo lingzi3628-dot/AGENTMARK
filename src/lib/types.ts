@@ -1,4 +1,4 @@
-// Shared domain types for the Giselle-inspired AI Agent Studio
+// Shared domain types for the AGENTMARK AI Agent Studio
 
 export type NodeKind =
   | "trigger" // entry point — user input
@@ -133,4 +133,4 @@ export interface Template {
   createdAt: string;
 }
 
-export type StudioView = "dashboard" | "studio" | "run" | "templates" | "knowledge" | "publish" | "integrations";
+export type StudioView = "dashboard" | "studio" | "run" | "templates" | "knowledge" | "publish" | "integrations" | "settings";

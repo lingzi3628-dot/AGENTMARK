@@ -371,7 +371,7 @@ function scriptSnippet(host: string, slug: string): string {
   (function(){
     var s=document.createElement('script');
     // Lightweight loader
-    var d=document.createElement('div'); d.id='giselle-widget';
+    var d=document.createElement('div'); d.id='agentmark-widget';
     document.body.appendChild(d);
     var f=document.createElement('iframe');
     f.src='${host}/embed/${slug}';
