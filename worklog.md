@@ -55,3 +55,19 @@ Work Log:
 
 Stage Summary:
 - App is fully interactive and browser-verified. AI agent execution (streaming via z-ai-web-dev-sdk) works end-to-end. No console/runtime errors. Responsive + sticky footer confirmed.
+
+---
+Task ID: 8b
+Agent: main
+Task: Preview verification + UX fix for empty Studio canvas
+
+Work Log:
+- User reported preview needed checking. Restarted dev server (it had died between sessions).
+- Used Agent Browser + z-ai vision CLI to screenshot and analyze all views.
+- Found: Dashboard rendered perfectly; Studio canvas was EMPTY ("Start building your agent" placeholder) because navigating to Studio with no active agent showed nothing; Run showed connection-refused because the server died mid-test.
+- Fix: Added `newAgentRequested` flag to Zustand store. Studio now auto-loads the most recent agent when entered with none active (unless the user explicitly clicked "New Agent"). Topbar sets the flag so blank-canvas intent is preserved.
+- Re-verified end-to-end with fresh server: Dashboard ✅, Studio now shows 3 connected nodes (Input→GLM Model→Response) ✅, Run executed a real agent — trace showed Input(DONE)→GLM Model(STREAMING→DONE)→Response(DONE) and the AI streamed a full 3-point answer about benefits of visual agent builders ✅.
+- Lint clean (0 errors).
+
+Stage Summary:
+- Preview fully verified working. Studio auto-load fix improves first impression. Real AI streaming confirmed. Dev server must be kept alive within a single command for long-running tests.

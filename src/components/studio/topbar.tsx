@@ -22,6 +22,7 @@ export function Topbar() {
   function newAgent() {
     useStudio.getState().setActiveAgent(null);
     useStudio.getState().setGraph([], []);
+    useStudio.getState().setNewAgentRequested(true);
     setView("studio");
     toast.success("New agent draft ready", {
       description: "Drag nodes onto the canvas to start building.",

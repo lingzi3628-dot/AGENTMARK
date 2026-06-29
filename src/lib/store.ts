@@ -32,6 +32,9 @@ interface StudioState {
   activeAgentId: string | null;
   activeAgent: Agent | null;
   setActiveAgent: (a: Agent | null) => void;
+  // true when the user explicitly requested a fresh blank canvas (New Agent)
+  newAgentRequested: boolean;
+  setNewAgentRequested: (v: boolean) => void;
 
   // editor graph (working copy)
   nodes: WorkflowNode[];
@@ -99,6 +102,8 @@ export const useStudio = create<StudioState>((set) => ({
 
   activeAgentId: null,
   activeAgent: null,
+  newAgentRequested: false,
+  setNewAgentRequested: (v) => set({ newAgentRequested: v }),
   setActiveAgent: (a) =>
     set({
       activeAgent: a,
@@ -108,6 +113,7 @@ export const useStudio = create<StudioState>((set) => ({
       selectedNodeId: null,
       messages: [],
       runTrace: [],
+      newAgentRequested: a ? false : useStudio.getState().newAgentRequested,
     }),
 
   nodes: [],

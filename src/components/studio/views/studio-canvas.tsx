@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow, ReactFlowProvider, Background, BackgroundVariant,
   Controls, MiniMap, addEdge, applyNodeChanges, applyEdgeChanges,
@@ -33,8 +33,9 @@ export function StudioCanvas() {
 
 function StudioInner() {
   const {
-    activeAgent, nodes, edges, setNodes, setEdges, selectedNodeId,
+    activeAgent, agents, nodes, edges, setNodes, setEdges, selectedNodeId,
     setSelectedNode, upsertAgent, setActiveAgent, setView, setGraph,
+    newAgentRequested,
   } = useStudio();
   const { screenToFlowPosition } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -42,6 +43,21 @@ function StudioInner() {
   const [saving, setSaving] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const seq = useRef(0);
+
+  // Auto-load the most recent agent if none is active (unless the user just
+  // clicked "New Agent"), so the canvas isn't empty on first visit.
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
+  useEffect(() => {
+    if (!activeAgent && !newAgentRequested && agentsRef.current.length > 0) {
+      setActiveAgent(agentsRef.current[0]);
+    }
+  }, [activeAgent, newAgentRequested, setActiveAgent]);
+
+  // Keep the name field in sync when the active agent changes.
+  useEffect(() => {
+    setName(activeAgent?.name ?? "Untitled Agent");
+  }, [activeAgent?.id]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
