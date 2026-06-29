@@ -13,6 +13,8 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   run: { title: "Run", sub: "Execute an agent and chat" },
   templates: { title: "Templates", sub: "Start from a pre-built agent" },
   knowledge: { title: "Knowledge", sub: "Documents and context for your agents" },
+  publish: { title: "Publish", sub: "Embed your agent on any website" },
+  integrations: { title: "Integrations", sub: "Connect agents to your platforms" },
 };
 
 export function Topbar() {

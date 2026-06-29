@@ -128,3 +128,55 @@ Work Log:
 
 Stage Summary:
 - All upgrades shipped and browser-verified. Lint clean. Dev server running on :3000.
+
+---
+Task ID: F2
+Agent: full-stack-developer
+Task: Publish/Embed view
+
+Work Log:
+- Read /home/z/my-project/worklog.md (project context: Giselle-inspired visual AI agent studio; dark-first emerald/teal theme; Next.js 16 + TS + Tailwind 4 + shadcn/ui + Zustand store with activeAgent/agents/setView; existing views dashboard/studio/run/templates/knowledge already routed in page.tsx).
+- Read src/components/studio/sidebar.tsx (NAV array uses {id,label,icon,desc} shape, StudioView-typed), src/components/studio/topbar.tsx (TITLES: Record<StudioView,{title,sub}>), src/app/page.tsx (view switch in <main>), src/lib/types.ts (PublishedAgent shape: id,agentId,slug,enabled,createdAt; StudioView already includes "publish"), src/lib/store.ts (useStudio with activeAgent, agents, setActiveAgent, setView), and src/components/studio/views/run-view.tsx for the AgentPicker pattern to mirror.
+- Created src/components/studio/views/publish-view.tsx ("use client", named export PublishView):
+  - No active agent -> centered picker Card with Rocket icon, "Select an agent to publish" heading, scrollable agent list (max-h-72 studio-scroll) with Icon chips, Templates + New agent buttons (New agent -> setView("studio")).
+  - Active agent -> PublishBody: wraps everything in `<div className="flex-1 overflow-y-auto studio-scroll p-4 lg:p-6">` with a max-w-4xl inner stack.
+  - Section 1 (Publish status Card): header with agent Icon chip + name + category/nodes + Live Badge when published. Switch (shadcn) toggling POST /api/agents/[id]/publish (ON) or DELETE (OFF) with toast.success and loading guards (disabled while loading||toggling). Slug Input (live filtered to [a-z0-9-], max 48 chars) + Update slug Button (disabled while saving or unchanged). Public URL read-only field with Globe icon + ExternalLink anchor to /embed/{slug}. On activeAgent.id change: GET /api/agents/[id]/publish populates local {published, slug, enabled} state. Host resolved client-side via `typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'` set in a useEffect to avoid SSR mismatch.
+  - Section 2 (Embed code Card, only when published): shadcn Tabs with 3 grid-cols-3 triggers (Script/iframe/React). Each TabsContent renders a CodeBlock — `<pre>` with monospace code + absolute-positioned Copy button (lucide Copy/Check, emerald check on success) calling navigator.clipboard.writeText + toast.success("Copied to clipboard"). Script snippet verbatim from task spec; iframe snippet `<iframe src=... width=380 height=600>`; React snippet a small AgentWidget component using useRef + iframe. `<HOST>` replaced with resolved origin, `<SLUG>` with state.slug.
+  - Section 3 (Live preview Card, only when published): Play icon header + Open ghost button (ExternalLink) linking to /embed/{slug}. `<iframe src={"/embed/"+slug} className="w-full h-[480px] rounded-lg border border-border bg-background" allow="clipboard-write" />`.
+  - Section 4 (Tips): primary-tinted info box with Info icon, role="note", "Tip:" text verbatim from spec.
+- Wired into navigation:
+  - sidebar.tsx: imported Rocket from lucide-react; added `{ id: "publish", label: "Publish", icon: Rocket, desc: "Embed on any website" }` to NAV array after Knowledge.
+  - topbar.tsx: added `publish: { title: "Publish", sub: "Embed your agent on any website" }` to TITLES (also added `integrations` entry since StudioView already includes it and TITLES is Record<StudioView,...> — required for type exhaustiveness).
+  - page.tsx: imported PublishView and added `{view === "publish" && <PublishView />}` to the main view switch.
+- Ran `bun run lint` -> 0 errors, 0 warnings (clean exit). Touched only: publish-view.tsx (new), sidebar.tsx (+1 nav entry + Rocket import), topbar.tsx (+2 TITLES entries), page.tsx (+1 import + 1 view render).
+
+Stage Summary:
+- Artifacts: src/components/studio/views/publish-view.tsx (new), sidebar.tsx/topbar.tsx/page.tsx (3-line edits each).
+- PublishView is fully wired and reachable from the sidebar. It loads publish state on agent change, toggles publish via the existing POST/DELETE endpoints, lets the user edit the slug, generates ready-to-paste Script/iframe/React embed snippets with one-click copy, and renders a live iframe preview of the embedded widget. Responsive (mobile-first, sm: row layouts), accessible (aria-labels, semantic main/section/label elements), dark-first emerald theme respected, no indigo/blue.
+
+---
+Task ID: F1-F5
+Agent: main
+Task: Export/embed agents, connect to platforms, new nodes & tools
+
+Work Log:
+- Prisma: added PublishedAgent + Integration models, pushed schema.
+- Types: added router/memory node kinds, http-request/tts tools, Integration/PublishedAgent interfaces, new StudioView entries (publish, integrations).
+- Constants: added http-request + tts tools, router/memory to NODE_PALETTE (9 node types now), PLATFORMS array (9 platforms: web, api, facebook, whatsapp, telegram, slack, discord, email, sms).
+- AI engine: added execution branches for memory (in-process store), router (keyword branching with trace), http-request (fetch any URL with {{input}} substitution), tts (audio synthesis).
+- APIs: /api/agents/[id]/publish (GET/POST/DELETE), /api/agents/[id]/integrations (GET/POST), /api/integrations/[id] (PATCH/DELETE), /api/public/run/[slug] (CORS-enabled public streaming run by slug).
+- Embed widget: /embed/[slug] route handler serving standalone HTML chat widget (no app shell) — works in iframes on external sites. Fixed initial RSC <html> nesting issue by converting from page.tsx to route.ts returning raw HTML.
+- Views: PublishView (toggle, slug, embed code tabs Script/iframe/React, live preview iframe) + IntegrationsView (9 platform cards, connect/config dialog, enable/disable toggles) — built by subagents, wired into sidebar/topbar/page router.
+- Node UI: updated agent-node + inspector for router (conditions editor), memory (key/mode), http-request (method/url/headers/body), tts (voice). Added minimap colors for new kinds.
+- Templates: added 4 new (Smart Triage Router, Memory Assistant, API-Powered Analyst, Voice Narrator) — 10 total.
+- Verification (Agent Browser + vision):
+  - 7 sidebar nav items (Dashboard, Studio, Run, Templates, Knowledge, Publish, Integrations).
+  - Studio palette: 9 node types.
+  - Templates: 10 templates including 4 new.
+  - Publish: toggle works, embed code tabs render, slug editable.
+  - Embed widget: HTTP 200, renders chat UI, user message sent, AI streamed a full response ("I can help you with a wide range of tasks...").
+  - Public run API: streams SSE correctly with CORS headers.
+  - Lint: 0 errors, 0 warnings.
+
+Stage Summary:
+- All requested features shipped: embed agents on websites (working widget + script/iframe/React code), connect to 9 platforms (Facebook, WhatsApp, Telegram, Slack, Discord, Email, SMS, Web, API), 4 new node types (Router, Memory, HTTP Request, TTS), 4 new templates. Dev server running.

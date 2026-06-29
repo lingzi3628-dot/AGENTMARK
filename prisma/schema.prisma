@@ -22,6 +22,8 @@ model Agent {
   updatedAt   DateTime @updatedAt
   runs        RunHistory[]
   knowledge   KnowledgeItem[]
+  published   PublishedAgent?
+  integrations Integration[]
 }
 
 model RunHistory {
@@ -59,4 +61,24 @@ model Template {
   featured    Boolean  @default(false)
   installs    Int      @default(0)
   createdAt   DateTime @default(now())
+}
+
+model PublishedAgent {
+  id        String   @id @default(cuid())
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  slug      String   @unique
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  platform  String   // facebook | whatsapp | telegram | slack | discord | email | sms | api | web
+  config    String   @default("{}") // JSON: platform-specific config
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

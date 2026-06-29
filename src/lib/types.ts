@@ -7,6 +7,8 @@ export type NodeKind =
   | "knowledge" // context / documents
   | "image-gen" // AI image generation
   | "vision" // multimodal image understanding
+  | "router" // conditional branching
+  | "memory" // conversation memory store
   | "output"; // final result
 
 export type ModelProvider = "glm-4.6" | "glm-4.5" | "glm-4.5-air" | "glm-4.5v";
@@ -14,10 +16,12 @@ export type ModelProvider = "glm-4.6" | "glm-4.5" | "glm-4.5-air" | "glm-4.5v";
 export type ToolType =
   | "web-search"
   | "page-reader"
+  | "http-request"
   | "summarize"
   | "translate"
   | "code"
-  | "classify";
+  | "classify"
+  | "tts";
 
 export interface WorkflowNodeData {
   label: string;
@@ -30,6 +34,19 @@ export interface WorkflowNodeData {
   content?: string;
   imageUrl?: string; // for vision node (base64 or data URL)
   imageSize?: "1024x1024" | "768x1344" | "864x1152" | "1344x768" | "1152x864";
+  // router node
+  routerConditions?: { keyword: string; targetNodeId: string }[];
+  routerDefault?: string; // default target node id
+  // http request tool
+  httpMethod?: "GET" | "POST";
+  httpUrl?: string;
+  httpHeaders?: string;
+  httpBody?: string;
+  // memory node
+  memoryKey?: string;
+  memoryMode?: "save" | "load" | "both";
+  // tts node
+  ttsVoice?: string;
   status?: "idle" | "running" | "done" | "error";
 }
 
@@ -74,6 +91,24 @@ export interface RunRecord {
   createdAt: string;
 }
 
+export interface Integration {
+  id: string;
+  agentId: string;
+  platform: string;
+  config: Record<string, string>;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublishedAgent {
+  id: string;
+  agentId: string;
+  slug: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
 export interface KnowledgeItem {
   id: string;
   agentId: string | null;
@@ -98,4 +133,4 @@ export interface Template {
   createdAt: string;
 }
 
-export type StudioView = "dashboard" | "studio" | "run" | "templates" | "knowledge";
+export type StudioView = "dashboard" | "studio" | "run" | "templates" | "knowledge" | "publish" | "integrations";

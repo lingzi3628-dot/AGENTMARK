@@ -13,7 +13,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, X, Settings2, Cpu, Upload, Link2 } from "lucide-react";
+import { Trash2, X, Settings2, Cpu, Upload, Link2, Plus } from "lucide-react";
 import { MODELS, TOOLS, IMAGE_SIZES } from "@/lib/constants";
 import { estimateNodeTokens, formatTokens } from "@/lib/tokens";
 import type { NodeKind, KnowledgeItem } from "@/lib/types";
@@ -25,6 +25,8 @@ const KIND_LABEL: Record<NodeKind, string> = {
   knowledge: "Knowledge Node",
   "image-gen": "Image Generator Node",
   vision: "Vision Node",
+  router: "Router Node",
+  memory: "Memory Node",
   output: "Output Node",
 };
 
@@ -185,6 +187,123 @@ export function InspectorPanel() {
                   : "Uses the upstream text as a search query and returns live results."}
               </p>
             )}
+            {d.tool === "http-request" && (
+              <div className="space-y-2 rounded-md border border-border p-2.5">
+                <div className="flex gap-2">
+                  <Select value={d.httpMethod ?? "GET"} onValueChange={(v) => updateNodeData(node.id, { httpMethod: v as "GET" | "POST" })}>
+                    <SelectTrigger className="h-8 w-24 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="GET">GET</SelectItem>
+                      <SelectItem value="POST">POST</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={d.httpUrl ?? ""}
+                    onChange={(e) => updateNodeData(node.id, { httpUrl: e.target.value })}
+                    placeholder="https://api.example.com/data?q={{input}}"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <Textarea
+                  value={d.httpHeaders ?? ""}
+                  onChange={(e) => updateNodeData(node.id, { httpHeaders: e.target.value })}
+                  placeholder='Headers JSON: {"Authorization":"Bearer ..."}'
+                  rows={2}
+                  className="text-xs font-mono"
+                />
+                {d.httpMethod === "POST" && (
+                  <Textarea
+                    value={d.httpBody ?? ""}
+                    onChange={(e) => updateNodeData(node.id, { httpBody: e.target.value })}
+                    placeholder="POST body (JSON or text)"
+                    rows={3}
+                    className="text-xs font-mono"
+                  />
+                )}
+                <p className="text-[11px] text-muted-foreground">Use <code className="rounded bg-muted px-1">{"{{input}}"}</code> in the URL to inject upstream text.</p>
+              </div>
+            )}
+            {d.tool === "tts" && (
+              <div className="space-y-1.5 rounded-md border border-border p-2.5">
+                <Label className="text-xs">Voice</Label>
+                <Select value={d.ttsVoice ?? "default"} onValueChange={(v) => updateNodeData(node.id, { ttsVoice: v })}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Converts the upstream text into speech audio.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {d.kind === "memory" && (
+          <div className="space-y-2.5">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Memory key</Label>
+              <Input
+                value={d.memoryKey ?? ""}
+                onChange={(e) => updateNodeData(node.id, { memoryKey: e.target.value })}
+                placeholder="e.g. user-profile, session-notes"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Mode</Label>
+              <Select value={d.memoryMode ?? "load"} onValueChange={(v) => updateNodeData(node.id, { memoryMode: v as "save" | "load" | "both" })}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="save">Save (write upstream to memory)</SelectItem>
+                  <SelectItem value="load">Load (recall stored value)</SelectItem>
+                  <SelectItem value="both">Both (save then recall)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
+              Memory persists across runs on this server. Use it to remember user context, facts, or intermediate results between conversations.
+            </p>
+          </div>
+        )}
+
+        {d.kind === "router" && (
+          <div className="space-y-2.5">
+            <Label className="text-xs">Routing conditions</Label>
+            <p className="text-[11px] text-muted-foreground">If the upstream text contains a keyword, note which branch to take. Connect this node to multiple downstream nodes.</p>
+            {(d.routerConditions ?? []).map((c, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <Input
+                  value={c.keyword}
+                  onChange={(e) => {
+                    const next = [...(d.routerConditions ?? [])];
+                    next[i] = { ...next[i], keyword: e.target.value };
+                    updateNodeData(node.id, { routerConditions: next });
+                  }}
+                  placeholder="keyword"
+                  className="h-8 text-xs"
+                />
+                <Input
+                  value={c.targetNodeId}
+                  onChange={(e) => {
+                    const next = [...(d.routerConditions ?? [])];
+                    next[i] = { ...next[i], targetNodeId: e.target.value };
+                    updateNodeData(node.id, { routerConditions: next });
+                  }}
+                  placeholder="→ node id"
+                  className="h-8 text-xs"
+                />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => updateNodeData(node.id, { routerConditions: (d.routerConditions ?? []).filter((_, j) => j !== i) })}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button size="sm" variant="outline" className="w-full gap-1.5"
+              onClick={() => updateNodeData(node.id, { routerConditions: [...(d.routerConditions ?? []), { keyword: "", targetNodeId: "" }] })}>
+              <Plus className="h-3.5 w-3.5" /> Add condition
+            </Button>
           </div>
         )}
 
@@ -328,6 +447,8 @@ function iconFor(kind: NodeKind): string {
     case "knowledge": return "database";
     case "image-gen": return "image";
     case "vision": return "eye";
+    case "router": return "git-branch";
+    case "memory": return "brain";
     case "output": return "flag";
   }
 }

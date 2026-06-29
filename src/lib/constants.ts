@@ -53,17 +53,21 @@ export interface ToolDef {
 export const TOOLS: ToolDef[] = [
   { id: "web-search", name: "Web Search", description: "Retrieve live information from the web.", icon: "globe" },
   { id: "page-reader", name: "Page Reader", description: "Fetch and extract clean content from a URL.", icon: "link" },
+  { id: "http-request", name: "HTTP Request", description: "Call any REST API with GET or POST.", icon: "webhook" },
   { id: "summarize", name: "Summarize", description: "Condense long content into concise summaries.", icon: "file-text" },
   { id: "translate", name: "Translate", description: "Translate text between languages.", icon: "languages" },
   { id: "code", name: "Code Generator", description: "Generate, explain, and refactor code.", icon: "code" },
   { id: "classify", name: "Classifier", description: "Categorize inputs into defined labels.", icon: "tags" },
+  { id: "tts", name: "Text to Speech", description: "Convert text into natural-sounding audio.", icon: "volume-2" },
 ];
 
 export const NODE_PALETTE = [
   { kind: "trigger", label: "Trigger", icon: "play", desc: "Starts the workflow with user input" },
   { kind: "model", label: "Language Model", icon: "sparkles", desc: "Generates text with an LLM" },
-  { kind: "tool", label: "Tool", icon: "wrench", desc: "Runs an action like search or summarize" },
+  { kind: "tool", label: "Tool", icon: "wrench", desc: "Runs an action like search, HTTP, or TTS" },
   { kind: "knowledge", label: "Knowledge", icon: "database", desc: "Injects documents as context" },
+  { kind: "memory", label: "Memory", icon: "brain", desc: "Save and recall values across runs" },
+  { kind: "router", label: "Router", icon: "git-branch", desc: "Branch the workflow by keyword" },
   { kind: "image-gen", label: "Image Generator", icon: "image", desc: "Creates images from a text prompt" },
   { kind: "vision", label: "Vision", icon: "eye", desc: "Understands images with GLM-4.5V" },
   { kind: "output", label: "Output", icon: "flag", desc: "Returns the final result" },
@@ -76,6 +80,91 @@ export const IMAGE_SIZES = [
   { id: "1152x864", label: "Landscape 1152×864" },
   { id: "864x1152", label: "Portrait 864×1152" },
 ] as const;
+
+export interface PlatformDef {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
+  fields: { key: string; label: string; placeholder: string; type?: "text" | "password" | "url" }[];
+}
+
+export const PLATFORMS: PlatformDef[] = [
+  {
+    id: "web", name: "Web Widget", icon: "globe", color: "bg-emerald-500/15 text-emerald-500",
+    description: "Embed the agent as a chat widget on any website.",
+    fields: [
+      { key: "allowedDomains", label: "Allowed domains", placeholder: "example.com, *.myapp.com", type: "text" },
+    ],
+  },
+  {
+    id: "api", name: "REST API", icon: "webhook", color: "bg-primary/15 text-primary",
+    description: "Call the agent from any backend via a public endpoint.",
+    fields: [
+      { key: "apiKey", label: "API key", placeholder: "sk-...", type: "password" },
+    ],
+  },
+  {
+    id: "facebook", name: "Facebook Messenger", icon: "message-circle", color: "bg-blue-500/15 text-blue-500",
+    description: "Respond to messages on your Facebook Page.",
+    fields: [
+      { key: "pageAccessToken", label: "Page Access Token", placeholder: "EAAB...", type: "password" },
+      { key: "verifyToken", label: "Verify Token", placeholder: "your-verify-token", type: "text" },
+      { key: "appId", label: "App ID", placeholder: "1234567890", type: "text" },
+    ],
+  },
+  {
+    id: "whatsapp", name: "WhatsApp", icon: "message-circle", color: "bg-green-500/15 text-green-500",
+    description: "Handle WhatsApp Business messages via the Cloud API.",
+    fields: [
+      { key: "phoneNumberId", label: "Phone Number ID", placeholder: "123...", type: "text" },
+      { key: "accessToken", label: "Access Token", placeholder: "EAAJ...", type: "password" },
+      { key: "verifyToken", label: "Webhook Verify Token", placeholder: "your-verify-token", type: "text" },
+    ],
+  },
+  {
+    id: "telegram", name: "Telegram", icon: "send", color: "bg-cyan-500/15 text-cyan-500",
+    description: "Connect the agent to a Telegram bot.",
+    fields: [
+      { key: "botToken", label: "Bot Token", placeholder: "123456:ABC-DEF...", type: "password" },
+    ],
+  },
+  {
+    id: "slack", name: "Slack", icon: "hash", color: "bg-purple-500/15 text-purple-500",
+    description: "Respond to mentions and DMs in Slack.",
+    fields: [
+      { key: "botToken", label: "Bot User OAuth Token", placeholder: "xoxb-...", type: "password" },
+      { key: "signingSecret", label: "Signing Secret", placeholder: "abc123...", type: "password" },
+    ],
+  },
+  {
+    id: "discord", name: "Discord", icon: "message-square", color: "bg-indigo-500/15 text-indigo-400",
+    description: "Connect the agent to a Discord bot.",
+    fields: [
+      { key: "botToken", label: "Bot Token", placeholder: "MTk4N...", type: "password" },
+      { key: "applicationId", label: "Application ID", placeholder: "1234567890", type: "text" },
+    ],
+  },
+  {
+    id: "email", name: "Email", icon: "mail", color: "bg-amber-500/15 text-amber-500",
+    description: "Auto-reply to incoming emails via SMTP/IMAP.",
+    fields: [
+      { key: "emailAddress", label: "Inbox address", placeholder: "support@yourco.com", type: "text" },
+      { key: "imapHost", label: "IMAP host", placeholder: "imap.gmail.com", type: "text" },
+      { key: "smtpHost", label: "SMTP host", placeholder: "smtp.gmail.com", type: "text" },
+    ],
+  },
+  {
+    id: "sms", name: "SMS (Twilio)", icon: "smartphone", color: "bg-rose-500/15 text-rose-500",
+    description: "Send and receive SMS via Twilio.",
+    fields: [
+      { key: "accountSid", label: "Account SID", placeholder: "AC...", type: "text" },
+      { key: "authToken", label: "Auth Token", placeholder: "••••", type: "password" },
+      { key: "fromNumber", label: "From number", placeholder: "+1...", type: "text" },
+    ],
+  },
+];
 
 export const AGENT_ICONS = [
   "sparkles", "bot", "brain", "code", "pen-tool", "search", "file-text",
@@ -199,5 +288,71 @@ export const DEFAULT_TEMPLATES: Omit<Template, "id" | "createdAt" | "installs">[
       node("o1", "output", { x: 1020, y: 200 }, { label: "Translation" }),
     ],
     edges: [edge("t1", "tl1"), edge("tl1", "m1"), edge("m1", "o1")],
+  },
+  {
+    name: "Smart Triage Router",
+    description: "Routes messages by keyword to specialized responder models.",
+    icon: "git-branch",
+    category: "support",
+    tags: ["router", "triage", "branching"],
+    featured: true,
+    nodes: [
+      node("t1", "trigger", { x: 0, y: 200 }, { label: "Message", content: "Incoming user message" }),
+      node("r1", "router", { x: 320, y: 200 }, { label: "Router", routerConditions: [
+        { keyword: "billing", targetNodeId: "m-billing" },
+        { keyword: "bug", targetNodeId: "m-bug" },
+      ], routerDefault: "m-general" }),
+      node("m-billing", "model", { x: 640, y: 60 }, { label: "Billing Expert", provider: "glm-4.5", systemPrompt: "You handle billing questions. Be precise about invoices, refunds, and plans." }),
+      node("m-bug", "model", { x: 640, y: 200 }, { label: "Bug Expert", provider: "glm-4.6", systemPrompt: "You handle bug reports. Ask for steps to reproduce and the expected vs actual behavior." }),
+      node("m-general", "model", { x: 640, y: 340 }, { label: "General Help", provider: "glm-4.5-air", systemPrompt: "You handle general questions. Be friendly and concise." }),
+      node("o1", "output", { x: 960, y: 200 }, { label: "Reply" }),
+    ],
+    edges: [edge("t1", "r1"), edge("r1", "m-billing"), edge("r1", "m-bug"), edge("r1", "m-general"), edge("m-billing", "o1"), edge("m-bug", "o1"), edge("m-general", "o1")],
+  },
+  {
+    name: "Memory Assistant",
+    description: "Remembers your name and context across runs using a memory node.",
+    icon: "brain",
+    category: "productivity",
+    tags: ["memory", "personal", "context"],
+    featured: true,
+    nodes: [
+      node("t1", "trigger", { x: 0, y: 200 }, { label: "Message", content: "Tell me about yourself" }),
+      node("mem1", "memory", { x: 300, y: 60 }, { label: "Recall", memoryKey: "user-profile", memoryMode: "load" }),
+      node("m1", "model", { x: 600, y: 200 }, { label: "Respond", provider: "glm-4.5", systemPrompt: "You are a personal assistant. Use the recalled memory to personalize your response. If the user shares their name or preferences, mention you'll remember them." }),
+      node("mem2", "memory", { x: 900, y: 60 }, { label: "Save", memoryKey: "user-profile", memoryMode: "save" }),
+      node("o1", "output", { x: 900, y: 200 }, { label: "Reply" }),
+    ],
+    edges: [edge("t1", "mem1"), edge("t1", "m1"), edge("mem1", "m1"), edge("m1", "mem2"), edge("m1", "o1")],
+  },
+  {
+    name: "API-Powered Analyst",
+    description: "Fetches live data from any REST API, then analyses it with GLM.",
+    icon: "webhook",
+    category: "engineering",
+    tags: ["http", "api", "data"],
+    featured: false,
+    nodes: [
+      node("t1", "trigger", { x: 0, y: 200 }, { label: "Query", content: "e.g. bitcoin price, weather in Nairobi" }),
+      node("tl1", "tool", { x: 320, y: 200 }, { label: "Fetch API", tool: "http-request", httpMethod: "GET", httpUrl: "https://api.example.com/data?q={{input}}" }),
+      node("m1", "model", { x: 640, y: 200 }, { label: "Analyse", provider: "glm-4.6", systemPrompt: "You are a data analyst. Given raw API data, extract the key insights and present them clearly with numbers and a brief summary." }),
+      node("o1", "output", { x: 960, y: 200 }, { label: "Analysis" }),
+    ],
+    edges: [edge("t1", "tl1"), edge("tl1", "m1"), edge("m1", "o1")],
+  },
+  {
+    name: "Voice Narrator",
+    description: "Turns text into a spoken audio response using text-to-speech.",
+    icon: "database",
+    category: "content",
+    tags: ["tts", "audio", "voice"],
+    featured: false,
+    nodes: [
+      node("t1", "trigger", { x: 0, y: 200 }, { label: "Text", content: "Text to narrate" }),
+      node("m1", "model", { x: 320, y: 200 }, { label: "Polish", provider: "glm-4.5-air", systemPrompt: "Rewrite the input as clear, natural narration suitable for text-to-speech." }),
+      node("tl1", "tool", { x: 640, y: 200 }, { label: "Speak", tool: "tts", ttsVoice: "default" }),
+      node("o1", "output", { x: 960, y: 200 }, { label: "Audio" }),
+    ],
+    edges: [edge("t1", "m1"), edge("m1", "tl1"), edge("tl1", "o1")],
   },
 ];

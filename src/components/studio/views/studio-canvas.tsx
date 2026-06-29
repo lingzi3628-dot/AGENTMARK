@@ -90,6 +90,8 @@ function StudioInner() {
       knowledge: { label: "Knowledge", content: "" },
       "image-gen": { label: "Image Gen", imageSize: "1024x1024" },
       vision: { label: "Vision", imageUrl: undefined },
+      router: { label: "Router", routerConditions: [], routerDefault: "" },
+      memory: { label: "Memory", memoryKey: "default", memoryMode: "load" },
       output: { label: "Output" },
     };
     const pos = position ?? { x: 120 + Math.random() * 80, y: 160 + Math.random() * 120 };
@@ -297,6 +299,10 @@ function kindColor(kind: NodeKind): string {
     case "model": return "var(--primary)";
     case "tool": return "#f59e0b";
     case "knowledge": return "#8b5cf6";
+    case "image-gen": return "#ec4899";
+    case "vision": return "#06b6d4";
+    case "router": return "#f97316";
+    case "memory": return "#14b8a6";
     case "output": return "#f43f5e";
   }
 }

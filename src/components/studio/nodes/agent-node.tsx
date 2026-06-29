@@ -13,6 +13,8 @@ const KIND_STYLES: Record<NodeKind, { ring: string; chip: string; label: string 
   knowledge: { ring: "border-violet-500/40", chip: "bg-violet-500/15 text-violet-400", label: "Knowledge" },
   "image-gen": { ring: "border-pink-500/40", chip: "bg-pink-500/15 text-pink-500", label: "Image" },
   vision: { ring: "border-cyan-500/40", chip: "bg-cyan-500/15 text-cyan-500", label: "Vision" },
+  router: { ring: "border-orange-500/40", chip: "bg-orange-500/15 text-orange-500", label: "Router" },
+  memory: { ring: "border-teal-500/40", chip: "bg-teal-500/15 text-teal-500", label: "Memory" },
   output: { ring: "border-rose-500/40", chip: "bg-rose-500/15 text-rose-500", label: "Output" },
 };
 
@@ -91,13 +93,35 @@ function AgentNodeBase({ data, selected }: NodeProps) {
             <NodeRow k="Model" v="GLM-4.5V" />
             {d.imageUrl ? (
               <div className="mt-1 overflow-hidden rounded-md border border-border">
-                { }
                 <img src={d.imageUrl} alt="vision input" className="h-16 w-full object-cover" />
               </div>
             ) : (
               <p className="text-[11px] text-muted-foreground">No image attached</p>
             )}
           </>
+        )}
+        {d.kind === "router" && (
+          <>
+            <NodeRow k="Branches" v={`${d.routerConditions?.length ?? 0}`} />
+            {(d.routerConditions ?? []).slice(0, 2).map((c, i) => (
+              <p key={i} className="truncate text-[11px] text-muted-foreground">→ “{c.keyword}”</p>
+            ))}
+          </>
+        )}
+        {d.kind === "memory" && (
+          <>
+            <NodeRow k="Key" v={d.memoryKey || "default"} />
+            <NodeRow k="Mode" v={d.memoryMode ?? "load"} />
+          </>
+        )}
+        {d.kind === "tool" && d.tool === "http-request" && (
+          <>
+            <NodeRow k="Method" v={d.httpMethod ?? "GET"} />
+            <p className="truncate text-[11px] text-muted-foreground">{d.httpUrl || "No URL set"}</p>
+          </>
+        )}
+        {d.kind === "tool" && d.tool === "tts" && (
+          <NodeRow k="Voice" v={d.ttsVoice ?? "default"} />
         )}
         {d.kind === "trigger" && (
           <p className="text-[11px] text-muted-foreground">{d.content || "User input"}</p>

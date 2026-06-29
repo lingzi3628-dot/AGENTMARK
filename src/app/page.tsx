@@ -9,6 +9,8 @@ import { StudioCanvas } from "@/components/studio/views/studio-canvas";
 import { RunView } from "@/components/studio/views/run-view";
 import { TemplatesView } from "@/components/studio/views/templates-view";
 import { KnowledgeView } from "@/components/studio/views/knowledge-view";
+import { PublishView } from "@/components/studio/views/publish-view";
+import { IntegrationsView } from "@/components/studio/views/integrations-view";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import type { Agent, Template, KnowledgeItem } from "@/lib/types";
@@ -67,6 +69,8 @@ export default function Home() {
           {view === "run" && <RunView />}
           {view === "templates" && <TemplatesView />}
           {view === "knowledge" && <KnowledgeView />}
+          {view === "publish" && <PublishView />}
+          {view === "integrations" && <IntegrationsView />}
         </main>
         <StudioFooter />
       </div>

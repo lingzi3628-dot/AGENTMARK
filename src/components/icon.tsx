@@ -3,7 +3,8 @@
 import {
   Sparkles, Bot, Brain, Code, PenTool, Search, FileText, Languages,
   Database, Rocket, Lightbulb, Wand2, Play, Wrench, Flag, Globe,
-  Tags, Image, Eye, Link, type LucideIcon,
+  Tags, Image, Eye, Link, Webhook, Volume2, GitBranch, Send, Hash,
+  MessageSquare, Mail, Smartphone, MessageCircle, type LucideIcon,
 } from "lucide-react";
 
 const MAP: Record<string, LucideIcon> = {
@@ -27,6 +28,15 @@ const MAP: Record<string, LucideIcon> = {
   image: Image,
   eye: Eye,
   link: Link,
+  webhook: Webhook,
+  "volume-2": Volume2,
+  "git-branch": GitBranch,
+  send: Send,
+  hash: Hash,
+  "message-square": MessageSquare,
+  mail: Mail,
+  smartphone: Smartphone,
+  "message-circle": MessageCircle,
 };
 
 export function Icon({

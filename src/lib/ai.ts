@@ -8,6 +8,9 @@ export async function getZAI() {
   return _zai;
 }
 
+// In-process memory store (persists across runs within the server lifetime).
+const memoryStore = new Map<string, string>();
+
 const TOOL_PROMPTS: Record<string, string> = {
   summarize:
     "You are a summarization engine. Produce a concise, faithful summary of the input. Use bullet points for key takeaways.",
@@ -88,12 +91,13 @@ export async function* executeAgent(
 
   const incomingContext = (id: string) => upstream(id).join("\n\n---\n\n") || ctx.input;
 
-  // Determine the terminal generation node (the one feeding an output node, else last model/tool/vision/image-gen)
+  // Determine the terminal generation node (the one feeding an output node, else last generation-capable node)
+  const genKinds = ["model", "tool", "vision", "image-gen", "memory", "router"];
   const outputNode = nodes.find((n) => n.data.kind === "output");
   const terminalGenId = outputNode
     ? (edges.find((e) => e.target === outputNode.id)?.source ??
-        [...order].reverse().find((n) => ["model", "tool", "vision", "image-gen"].includes(n.data.kind))?.id)
-    : [...order].reverse().find((n) => ["model", "tool", "vision", "image-gen"].includes(n.data.kind))?.id;
+        [...order].reverse().find((n) => genKinds.includes(n.data.kind))?.id)
+    : [...order].reverse().find((n) => genKinds.includes(n.data.kind))?.id;
 
   let totalTokens = 0;
 
@@ -144,6 +148,62 @@ export async function* executeAgent(
             outputs.set(node.id, `Page Reader: could not fetch ${url}.`);
           }
         }
+      } else if (data.kind === "tool" && data.tool === "http-request") {
+        // Call any REST endpoint. URL/templates support {{input}} substitution.
+        const incoming = incomingContext(node.id);
+        let url = (data.httpUrl ?? "").trim();
+        if (!url) {
+          // If no URL set, treat upstream itself as the URL.
+          url = (incoming.match(/https?:\/\/\S+/)?.[0] ?? "").trim();
+        }
+        if (!url) {
+          outputs.set(node.id, "HTTP Request: no URL configured.");
+        } else {
+          url = url.replace(/\{\{input\}\}/g, encodeURIComponent(incoming.slice(0, 500)));
+          const method = data.httpMethod ?? "GET";
+          try {
+            const headers: Record<string, string> = {};
+            if (data.httpHeaders) {
+              try { Object.assign(headers, JSON.parse(data.httpHeaders)); } catch { /* ignore */ }
+            }
+            const res = await fetch(url, {
+              method,
+              headers,
+              body: method === "POST" ? (data.httpBody ?? undefined) : undefined,
+            });
+            const text = await res.text();
+            const trimmed = text.slice(0, 4000);
+            outputs.set(node.id, `HTTP ${method} ${url} → ${res.status}\n\n${trimmed}`);
+            totalTokens += Math.ceil(trimmed.length / 4);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "fetch failed";
+            outputs.set(node.id, `HTTP Request failed: ${msg}`);
+          }
+        }
+      } else if (data.kind === "tool" && data.tool === "tts") {
+        const text = incomingContext(node.id).slice(0, 1000) || ctx.input;
+        try {
+          const res = await zai.audio.tts.create({
+            input: text,
+            voice: data.ttsVoice ?? "default",
+          });
+          // res is an audio buffer/stream; we surface a markdown audio link.
+          // Many TTS SDKs return base64 — handle both shapes defensively.
+          const b64 =
+            (res as { data?: string })?.data ??
+            (res as { audio?: string })?.audio ??
+            "";
+          if (b64) {
+            const dataUrl = `data:audio/mpeg;base64,${b64}`;
+            outputs.set(node.id, dataUrl);
+            yield { type: "delta", content: `\n\n🔊 [Audio response](\`${dataUrl.slice(0, 80)}…\`)\n` };
+          } else {
+            outputs.set(node.id, "[TTS: no audio returned]");
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "tts failed";
+          outputs.set(node.id, `[TTS error: ${msg}]`);
+        }
       } else if (data.kind === "tool") {
         const sys = TOOL_PROMPTS[data.tool ?? "summarize"] ?? TOOL_PROMPTS.summarize;
         const out = await runCompletion(zai, sys, incomingContext(node.id), data.provider, ctx.history);
@@ -193,6 +253,35 @@ export async function* executeAgent(
             totalTokens += Math.ceil(out.length / 4);
           }
         }
+      } else if (data.kind === "memory") {
+        const key = data.memoryKey || "default";
+        const mode = data.memoryMode ?? "load";
+        const incoming = incomingContext(node.id);
+        let result = "";
+        if (mode === "save" || mode === "both") {
+          memoryStore.set(key, incoming.slice(0, 8000));
+        }
+        if (mode === "load" || mode === "both") {
+          const stored = memoryStore.get(key) ?? "";
+          result = stored ? `Memory[${key}]:\n${stored}` : `Memory[${key}] is empty.`;
+        } else {
+          result = `Saved to memory[${key}].`;
+        }
+        outputs.set(node.id, result);
+      } else if (data.kind === "router") {
+        // A router doesn't transform data; it passes through upstream and
+        // emits a trace note about which branch would be taken. The actual
+        // branching is handled by the topological order + edge connections.
+        const incoming = incomingContext(node.id);
+        const conds = data.routerConditions ?? [];
+        const matched = conds.find((c) =>
+          c.keyword && c.keyword.trim() && incoming.toLowerCase().includes(c.keyword.toLowerCase()),
+        );
+        const note = matched
+          ? `Routed to "${matched.targetNodeId}" (matched "${matched.keyword}")`
+          : `Routed to default (${data.routerDefault ?? "fall-through"})`;
+        outputs.set(node.id, incoming);
+        yield { type: "trace", node: node.id, label: `${label}: ${note}`, status: "streaming" };
       } else if (data.kind === "model") {
         const sys = data.systemPrompt || "You are a helpful AI agent.";
         const context = incomingContext(node.id);

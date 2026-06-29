@@ -4,8 +4,8 @@ import { useStudio } from "@/lib/store";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, Workflow, Play, LayoutTemplate, Database,
-  Sparkles, Github, ChevronRight, X,
+  LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
+  Sparkles, Github, ChevronRight, X, Plug,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -15,6 +15,8 @@ const NAV: { id: StudioView; label: string; icon: typeof LayoutDashboard; desc: 
   { id: "run", label: "Run", icon: Play, desc: "Execute & chat" },
   { id: "templates", label: "Templates", icon: LayoutTemplate, desc: "Pre-built agents" },
   { id: "knowledge", label: "Knowledge", icon: Database, desc: "Context & documents" },
+  { id: "publish", label: "Publish", icon: Rocket, desc: "Embed on any website" },
+  { id: "integrations", label: "Integrations", icon: Plug, desc: "Connect to platforms" },
 ];
 
 export function Sidebar() {
