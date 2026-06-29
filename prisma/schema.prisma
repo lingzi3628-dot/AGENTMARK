@@ -1,0 +1,62 @@
+// Giselle-inspired AI Agent Studio schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  icon        String   @default("sparkles")
+  category    String   @default("custom")
+  nodes       String   @default("[]") // JSON: WorkflowNode[]
+  edges       String   @default("[]") // JSON: WorkflowEdge[]
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  runs        RunHistory[]
+  knowledge   KnowledgeItem[]
+}
+
+model RunHistory {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  input     String   @default("")
+  output    String   @default("")
+  status    String   @default("completed") // running | completed | error
+  tokens    Int      @default(0)
+  duration  Int      @default(0) // ms
+  createdAt DateTime @default(now())
+}
+
+model KnowledgeItem {
+  id        String   @id @default(cuid())
+  agentId   String?
+  agent     Agent?   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  title     String
+  content   String   @default("")
+  type      String   @default("text") // text | file | url
+  source    String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  icon        String   @default("sparkles")
+  category    String   @default("productivity")
+  tags        String   @default("")
+  nodes       String   @default("[]")
+  edges       String   @default("[]")
+  featured    Boolean  @default(false)
+  installs    Int      @default(0)
+  createdAt   DateTime @default(now())
+}
