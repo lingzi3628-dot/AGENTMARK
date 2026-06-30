@@ -1,6 +1,7 @@
 import ZAI from "z-ai-web-dev-sdk";
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 import type { WorkflowNode, WorkflowEdge, WorkflowNodeData } from "./types";
 
 // Singleton ZAI client
@@ -26,11 +27,38 @@ async function ensureConfig() {
 }
 
 export async function getZAI() {
+  // Skip the SDK entirely if no config file exists (e.g. on Railway/production
+  // without ZAI_API_KEY). We use the direct HTTP fallback instead.
+  const hasConfig = await hasZaiConfig();
+  if (!hasConfig) return null;
   if (!_zai) {
     await ensureConfig();
     _zai = await ZAI.create();
   }
   return _zai;
+}
+
+/** Check if any z-ai config file exists. */
+async function hasZaiConfig(): Promise<boolean> {
+  if (process.env.ZAI_BASE_URL && process.env.ZAI_API_KEY) return true;
+  try {
+    await fs.access(path.join(process.cwd(), ".z-ai-config"));
+    return true;
+  } catch {
+    // check home dir and /etc
+  }
+  try {
+    await fs.access(path.join(os.homedir(), ".z-ai-config"));
+    return true;
+  } catch {
+    // not in home
+  }
+  try {
+    await fs.access("/etc/.z-ai-config");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // In-process memory store (persists across runs within the server lifetime).
