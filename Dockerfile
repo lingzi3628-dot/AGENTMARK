@@ -31,4 +31,4 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 EXPOSE 3000
-CMD ["bun", "run", "start"]
+CMD ["sh", "-c", "bunx prisma db push --accept-data-loss || true && exec bun run start"]
