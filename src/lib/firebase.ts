@@ -15,12 +15,12 @@ import {
 } from "firebase/auth";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyD_zWRWwX7V5aOPvSOWlKyZdEBlJQhL7LE",
-  authDomain: "aethervid-1e73w.firebaseapp.com",
-  projectId: "aethervid-1e73w",
-  storageBucket: "aethervid-1e73w.firebasestorage.app",
-  messagingSenderId: "777013811265",
-  appId: "1:777013811265:web:37baa211e6c1a497a38ec0",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyD_zWRWwX7V5aOPvSOWlKyZdEBlJQhL7LE",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "aethervid-1e73w.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "aethervid-1e73w",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "aethervid-1e73w.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "777013811265",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:777013811265:web:37baa211e6c1a497a38ec0",
 };
 
 let _app: FirebaseApp | null = null;

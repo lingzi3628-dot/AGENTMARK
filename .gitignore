@@ -52,3 +52,14 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# AGENTMARK runtime files
+telegram-poll.log
+supervisor.log
+keep-alive.log
+verify*.sh
+keep-alive*.sh
+supervisor*.sh
+telegram-poll.sh
+db/*.db
+db/*.db-journal
