@@ -3,6 +3,9 @@
   "framework": "nextjs",
   "buildCommand": "bun run vercel-build",
   "installCommand": "bun install --frozen-lockfile",
+  "git": {
+    "deploymentEnabled": true
+  },
   "functions": {
     "src/app/api/webhooks/*/route.ts": {
       "maxDuration": 30
