@@ -1,11 +1,11 @@
 import ZAI from "z-ai-web-dev-sdk";
 import { promises as fs } from "fs";
 import path from "path";
-import os from "os";
 import type { WorkflowNode, WorkflowEdge, WorkflowNodeData } from "./types";
 
 // Singleton ZAI client
 let _zai: ZAI | null = null;
+let _triedInit = false;
 
 // Ensure the z-ai config file exists. On Railway/production, the config is
 // provided via env vars (ZAI_BASE_URL, ZAI_API_KEY) — we write it to a file
@@ -26,38 +26,20 @@ async function ensureConfig() {
   }
 }
 
-export async function getZAI() {
-  // Skip the SDK entirely if no config file exists (e.g. on Railway/production
-  // without ZAI_API_KEY). We use the direct HTTP fallback instead.
-  const hasConfig = await hasZaiConfig();
-  if (!hasConfig) return null;
-  if (!_zai) {
+export async function getZAI(): Promise<ZAI | null> {
+  // If we already tried and failed, don't try again (cached null)
+  if (_triedInit && !_zai) return null;
+  if (_zai) return _zai;
+
+  _triedInit = true;
+  try {
     await ensureConfig();
     _zai = await ZAI.create();
-  }
-  return _zai;
-}
-
-/** Check if any z-ai config file exists. */
-async function hasZaiConfig(): Promise<boolean> {
-  if (process.env.ZAI_BASE_URL && process.env.ZAI_API_KEY) return true;
-  try {
-    await fs.access(path.join(process.cwd(), ".z-ai-config"));
-    return true;
-  } catch {
-    // check home dir and /etc
-  }
-  try {
-    await fs.access(path.join(os.homedir(), ".z-ai-config"));
-    return true;
-  } catch {
-    // not in home
-  }
-  try {
-    await fs.access("/etc/.z-ai-config");
-    return true;
-  } catch {
-    return false;
+    return _zai;
+  } catch (e) {
+    console.log("[agentmark] SDK unavailable, using free API fallback:", e instanceof Error ? e.message : "unknown");
+    _zai = null;
+    return null;
   }
 }
 
@@ -133,14 +115,10 @@ export async function* executeAgent(
   const started = Date.now();
   const order = topoSort(nodes, edges);
   const outputs = new Map<string, string>();
-  let zai: ZAI | null = null;
-  try {
-    zai = await getZAI();
-  } catch (e) {
-    // SDK config not available — we'll use direct HTTP fallback in runCompletion
-    console.log("[agentmark] SDK unavailable, using free API fallback:", e instanceof Error ? e.message : "unknown");
-    zai = null;
-  }
+  // getZAI() returns null if the SDK config isn't available (e.g. on Railway
+  // without ZAI_API_KEY). runCompletion/streamCompletion handle null by
+  // falling back to the free API via directCompletion/directStream.
+  const zai = await getZAI();
 
   // upstream outputs for a node
   const upstream = (id: string) =>
