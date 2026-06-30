@@ -34,6 +34,7 @@ import {
   Crown,
   Cpu,
   MessageSquare,
+  DollarSign,
   type LucideIcon,
 } from "lucide-react";
 import { formatTokens } from "@/lib/tokens";
@@ -46,13 +47,17 @@ interface AnalyticsData {
     tokens: number;
     avgDurationMs: number;
     successRate: number;
+    costCents: number;
+    costUsd: number;
   };
-  daily: { date: string; tokens: number; runs: number }[];
+  daily: { date: string; tokens: number; runs: number; costCents: number }[];
   perAgent: {
     agentId: string;
     agentName: string;
     runs: number;
     tokens: number;
+    costCents: number;
+    costUsd: number;
     lastRunAt: string;
   }[];
   perIntegration: {
@@ -67,6 +72,8 @@ interface AnalyticsData {
     maxAgents: number;
     tokensUsedToday: number;
     agentCount: number;
+    spendUsedTodayCents: number;
+    spendLimitCents: number;
   };
 }
 
@@ -158,6 +165,14 @@ export function AnalyticsView() {
     100,
     Math.round((data.plan.agentCount / Math.max(1, data.plan.maxAgents)) * 100),
   );
+  // Daily spend progress (0-100). Drives the spend bar color:
+  //   <80% → primary (emerald), 80-99% → amber, 100% → destructive.
+  const spendPct = Math.min(
+    100,
+    Math.round((data.plan.spendUsedTodayCents / Math.max(1, data.plan.spendLimitCents)) * 100),
+  );
+  const spendBarColor =
+    spendPct >= 100 ? "bg-destructive" : spendPct >= 80 ? "bg-amber-500" : "bg-primary";
 
   const integrationTotals = data.perIntegration.reduce(
     (acc, p) => {
@@ -173,7 +188,7 @@ export function AnalyticsView() {
     <div className="flex-1 overflow-y-auto studio-scroll p-4 lg:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Stat cards */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatCard
             icon={Play}
             label="Total runs (30d)"
@@ -201,6 +216,12 @@ export function AnalyticsView() {
             label="Success rate"
             value={`${Math.round(data.totals.successRate * 100)}%`}
             accent="accent"
+          />
+          <StatCard
+            icon={DollarSign}
+            label="Total spend (30d)"
+            value={`$${data.totals.costUsd.toFixed(2)}`}
+            accent="primary"
           />
         </div>
 
@@ -245,6 +266,53 @@ export function AnalyticsView() {
                   dataKey="tokens"
                   stroke="var(--primary)"
                   fill="url(#tokGrad)"
+                  strokeWidth={2}
+                  fillOpacity={0.8}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold">Daily spend (USD)</h3>
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={data.daily} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                <defs>
+                  <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="date"
+                  stroke="var(--muted-foreground)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(d: string) => d.slice(5)}
+                />
+                <YAxis
+                  stroke="var(--muted-foreground)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={(v: number) => `$${(v).toFixed(2)}`}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  formatter={(value: number) => [`$${(value).toFixed(4)}`, "Spend"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="costCents"
+                  stroke="var(--primary)"
+                  fill="url(#spendGrad)"
                   strokeWidth={2}
                   fillOpacity={0.8}
                 />
@@ -315,18 +383,22 @@ export function AnalyticsView() {
                     <TableHead>Agent</TableHead>
                     <TableHead className="text-right">Runs</TableHead>
                     <TableHead className="text-right">Tokens</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Last run</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.perAgent.map((a) => (
                     <TableRow key={a.agentId}>
-                      <TableCell className="max-w-[160px] truncate font-medium">
+                      <TableCell className="max-w-[140px] truncate font-medium">
                         {a.agentName}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{a.runs}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatTokens(a.tokens)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        ${a.costUsd.toFixed(2)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(a.lastRunAt), { addSuffix: true })}
@@ -454,6 +526,32 @@ export function AnalyticsView() {
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {agentPct}% of agent slots in use.
+              </p>
+            </div>
+
+            {/* Daily spend (USD) — amber >80%, red at limit */}
+            <div className="sm:col-span-2">
+              <div className="mb-1.5 flex items-center justify-between text-sm">
+                <span className="flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4 text-primary" /> Daily spend
+                </span>
+                <span className="text-muted-foreground">
+                  ${(data.plan.spendUsedTodayCents / 100).toFixed(2)} /{" "}
+                  ${(data.plan.spendLimitCents / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    spendBarColor,
+                  )}
+                  style={{ width: `${spendPct}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {spendPct}% of daily spend limit used today.
+                {spendPct >= 100 && " — limit reached, upgrade your plan to keep running."}
               </p>
             </div>
           </div>

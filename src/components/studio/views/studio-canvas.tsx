@@ -122,6 +122,8 @@ function StudioInner() {
       vision: { label: "Vision", imageUrl: undefined },
       router: { label: "Router", routerConditions: [], routerDefault: "" },
       memory: { label: "Memory", memoryKey: "default", memoryMode: "load" },
+      "sub-agent": { label: "Sub-Agent", subAgentId: "", subAgentInputTemplate: "{{input}}" },
+      code: { label: "Code", code: "", codeTimeout: 5000 },
       output: { label: "Output" },
     };
     const pos = position ?? { x: 120 + Math.random() * 80, y: 160 + Math.random() * 120 };
@@ -508,6 +510,9 @@ function kindColor(kind: NodeKind): string {
     case "vision": return "#06b6d4";
     case "router": return "#f97316";
     case "memory": return "#14b8a6";
+    case "sub-agent": return "#8b5cf6";
+    case "code": return "#f59e0b";
     case "output": return "#f43f5e";
+    default: return "var(--primary)";
   }
 }

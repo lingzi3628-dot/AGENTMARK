@@ -14,6 +14,9 @@ export interface AppUser {
   maxAgents: number;
   tokensUsedToday: number;
   tokenResetDate: string;
+  // V2 cost tracking — daily spend in USD cents (matches User.spendUsedTodayCents)
+  spendUsedTodayCents: number;
+  spendResetDate: string;
   glmApiKey: string;
   openaiApiKey: string;
   anthropicApiKey: string;

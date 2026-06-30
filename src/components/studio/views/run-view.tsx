@@ -81,6 +81,10 @@ export function RunView() {
       let finalOutput = "";
       let tokens = 0;
       let duration = 0;
+      // V2 cost tracking — populated from the SSE __cost__ trace event
+      // emitted after the run completes. Forwarded to /runs POST below.
+      let costCents = 0;
+      let source = "manual";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -101,7 +105,18 @@ export function RunView() {
           try { payload = JSON.parse(data); } catch { continue; }
 
           if (type === "trace") {
-            setRunTrace([...useStudio.getState().runTrace, { node: payload.node!, label: payload.label!, status: payload.status! }]);
+            // Intercept the __cost__ marker event to capture cost info.
+            if (payload.node === "__cost__" && payload.content) {
+              try {
+                const c = JSON.parse(payload.content) as { costCents?: number; source?: string };
+                if (typeof c.costCents === "number") costCents = c.costCents;
+                if (typeof c.source === "string" && c.source) source = c.source;
+              } catch {
+                // non-fatal
+              }
+            } else {
+              setRunTrace([...useStudio.getState().runTrace, { node: payload.node!, label: payload.label!, status: payload.status! }]);
+            }
           } else if (type === "delta") {
             appendToMessage(aiMsg.id, payload.content ?? "");
           } else if (type === "done") {
@@ -115,7 +130,8 @@ export function RunView() {
       }
 
       finalizeMessage(aiMsg.id);
-      // Persist the run to the database
+      // Persist the run to the database — include costCents + source so the
+      // RunHistory row can be joined into analytics + per-agent dashboards.
       const run: RunRecord = {
         id: uid(), agentId: activeAgent!.id, input: text,
         output: finalOutput, status: "completed", tokens, duration,
@@ -125,7 +141,7 @@ export function RunView() {
       fetch(`/api/agents/${activeAgent!.id}/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(run),
+        body: JSON.stringify({ ...run, costCents, source }),
       }).catch(() => undefined);
     } catch (err) {
       if ((err as Error).name === "AbortError") {

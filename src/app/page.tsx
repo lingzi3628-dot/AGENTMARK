@@ -13,10 +13,15 @@ import { TemplatesView } from "@/components/studio/views/templates-view";
 import { KnowledgeView } from "@/components/studio/views/knowledge-view";
 import { PublishView } from "@/components/studio/views/publish-view";
 import { IntegrationsView } from "@/components/studio/views/integrations-view";
+import { SchedulesView } from "@/components/studio/views/schedules-view";
 import { CustomerView } from "@/components/studio/views/customer-view";
 import { SettingsView } from "@/components/studio/views/settings-view";
 import { AnalyticsView } from "@/components/studio/views/analytics-view";
 import { BillingView } from "@/components/studio/views/billing-view";
+import { ApiKeysView } from "@/components/studio/views/api-keys-view";
+import { TeamsView } from "@/components/studio/views/teams-view";
+import { HistoryView } from "@/components/studio/views/history-view";
+import { MarketplaceView } from "@/components/studio/views/marketplace-view";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
@@ -86,9 +91,14 @@ export default function Home() {
               {view === "knowledge" && <KnowledgeView />}
               {view === "publish" && <PublishView />}
               {view === "integrations" && <IntegrationsView />}
+              {view === "schedules" && <SchedulesView />}
               {view === "customer" && <CustomerView />}
               {view === "analytics" && <AnalyticsView />}
               {view === "billing" && <BillingView />}
+              {view === "api-keys" && <ApiKeysView />}
+              {view === "teams" && <TeamsView />}
+              {view === "history" && <HistoryView />}
+              {view === "marketplace" && <MarketplaceView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

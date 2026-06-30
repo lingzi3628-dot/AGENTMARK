@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { setTelegramWebhook, deleteTelegramWebhook, getTelegramBotInfo, deriveWebhookUrl as deriveTelegramWebhookUrl } from "@/lib/telegram";
 import { getWhatsAppPhoneNumberInfo, deriveWebhookUrl as deriveWhatsAppWebhookUrl } from "@/lib/whatsapp";
 import { testSlackAuth } from "@/lib/slack";
+import { EmailClient } from "@/lib/email";
+import { VoiceClient } from "@/lib/voice";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +94,73 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     } catch (e) {
       setupStatus = { ok: false, message: e instanceof Error ? e.message : "setup failed" };
+    }
+  } else if (platform === "email" && config.emailAddress && config.imapHost && config.smtpHost && config.password) {
+    try {
+      // Validate IMAP + SMTP credentials by opening a test connection.
+      // We do NOT poll messages here — just verify we can connect + open INBOX.
+      const imapPort = config.imapPort ? Number(config.imapPort) : undefined;
+      const smtpPort = config.smtpPort ? Number(config.smtpPort) : undefined;
+      const emailClient = new EmailClient({
+        imapHost: config.imapHost,
+        smtpHost: config.smtpHost,
+        imapPort,
+        smtpPort,
+        user: config.emailAddress,
+        pass: config.password,
+        tls: true,
+      });
+      const testResult = await emailClient.testConnection();
+      if (!testResult.ok) {
+        // Roll back the integration row we just created — invalid creds.
+        await db.integration.delete({ where: { id: created.id } }).catch(() => undefined);
+        return NextResponse.json(
+          { error: `Email credentials invalid: ${testResult.error || "unknown error"}` },
+          { status: 400 },
+        );
+      }
+      setupStatus = {
+        ok: true,
+        message: `Email connected! Polling ${config.emailAddress} every 5 minutes. Use the "Test poll" button on the integration card to fetch + reply immediately.`,
+      };
+    } catch (e) {
+      await db.integration.delete({ where: { id: created.id } }).catch(() => undefined);
+      return NextResponse.json(
+        { error: `Email validation failed: ${e instanceof Error ? e.message : "unknown error"}` },
+        { status: 400 },
+      );
+    }
+  } else if (platform === "voice" && config.accountSid && config.authToken && config.fromNumber) {
+    try {
+      // Validate Twilio credentials by fetching the Account resource.
+      const voiceClient = new VoiceClient({
+        accountSid: config.accountSid,
+        authToken: config.authToken,
+        fromNumber: config.fromNumber,
+      });
+      const testResult = await voiceClient.testAuth();
+      if (!testResult.ok) {
+        await db.integration.delete({ where: { id: created.id } }).catch(() => undefined);
+        return NextResponse.json(
+          { error: `Twilio credentials invalid: ${testResult.error || "unknown error"}` },
+          { status: 400 },
+        );
+      }
+      // Surface the inbound webhook URL so the user knows what to paste into the
+      // Twilio console (Phone Numbers → Voice & Fax → "A Call Comes In").
+      const proto = req.headers.get("x-forwarded-proto") || "https";
+      const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost";
+      const incomingUrl = `${proto}://${host}/api/voice/incoming?i=${created.id}`;
+      setupStatus = {
+        ok: true,
+        message: `Voice connected! Twilio account: ${testResult.friendlyName || config.accountSid}. Set the inbound webhook URL in your Twilio number's Voice settings to: ${incomingUrl}`,
+      };
+    } catch (e) {
+      await db.integration.delete({ where: { id: created.id } }).catch(() => undefined);
+      return NextResponse.json(
+        { error: `Twilio validation failed: ${e instanceof Error ? e.message : "unknown error"}` },
+        { status: 400 },
+      );
     }
   }
 

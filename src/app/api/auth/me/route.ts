@@ -15,7 +15,12 @@ export async function GET(req: NextRequest) {
   if (user.tokenResetDate !== today) {
     user = await db.user.update({
       where: { id: user.id },
-      data: { tokensUsedToday: 0, tokenResetDate: today },
+      data: {
+        tokensUsedToday: 0,
+        tokenResetDate: today,
+        spendUsedTodayCents: 0,
+        spendResetDate: today,
+      },
     });
   }
 
@@ -30,6 +35,8 @@ export async function GET(req: NextRequest) {
     maxAgents: user.maxAgents,
     tokensUsedToday: user.tokensUsedToday,
     tokenResetDate: user.tokenResetDate,
+    spendUsedTodayCents: user.spendUsedTodayCents,
+    spendResetDate: user.spendResetDate,
     // Built-in BYOK keys returned masked (never expose plaintext to the client)
     glmApiKey: maskKey(user.glmApiKey ? decrypt(user.glmApiKey) : ""),
     openaiApiKey: maskKey(user.openaiApiKey ? decrypt(user.openaiApiKey) : ""),

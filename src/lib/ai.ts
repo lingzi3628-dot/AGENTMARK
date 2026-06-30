@@ -2,6 +2,14 @@ import ZAI from "z-ai-web-dev-sdk";
 import { promises as fs } from "fs";
 import path from "path";
 import type { WorkflowNode, WorkflowEdge, WorkflowNodeData } from "./types";
+import { db } from "./db";
+import { retrieveContext, formatRetrievedChunks } from "./rag";
+import { runSandboxed } from "./sandbox";
+
+// Maximum sub-agent recursion depth. The top-level call is depth 0; sub-agents
+// can recurse up to MAX_SUB_AGENT_DEPTH times before the runtime refuses to go
+// deeper. Prevents accidental infinite loops when agents reference each other.
+const MAX_SUB_AGENT_DEPTH = 3;
 
 // Singleton ZAI client
 let _zai: ZAI | null = null;
@@ -84,6 +92,12 @@ export interface ExecEvent {
   content?: string;
   output?: string;
   tokens?: number;
+  // V2 cost tracking — broken-down token counts + the provider that drove
+  // the terminal generation. Consumed by /api/agents/[id]/run to compute
+  // cost via calculateCost(provider, inputTokens, outputTokens).
+  inputTokens?: number;
+  outputTokens?: number;
+  provider?: string;
   duration?: number;
   message?: string;
 }
@@ -91,6 +105,16 @@ export interface ExecEvent {
 export interface ExecContext {
   input: string;
   history: { role: "user" | "assistant"; content: string }[];
+  // Agent ID — required for RAG (semantic retrieval over uploaded docs).
+  // Optional so existing callers (e.g. public run, webhooks) keep working.
+  agentId?: string;
+  // Sub-agent recursion depth — 0 at the top level, +1 for each nested call.
+  // The executor refuses to recurse beyond MAX_SUB_AGENT_DEPTH.
+  depth?: number;
+  // Chain of agent IDs that led to this call. Used to short-circuit cycles
+  // (an agent calling itself, directly or transitively, more than the depth
+  // cap allows).
+  callStack?: string[];
 }
 
 /**
@@ -102,6 +126,8 @@ export async function* executeAgent(
   edges: WorkflowEdge[],
   ctx: ExecContext,
 ): AsyncGenerator<ExecEvent> {
+  const depth = ctx.depth ?? 0;
+  const callStack = ctx.callStack ?? (ctx.agentId ? [ctx.agentId] : []);
   const started = Date.now();
   const order = topoSort(nodes, edges);
   const outputs = new Map<string, string>();
@@ -120,7 +146,7 @@ export async function* executeAgent(
   const incomingContext = (id: string) => upstream(id).join("\n\n---\n\n") || ctx.input;
 
   // Determine the terminal generation node (the one feeding an output node, else last generation-capable node)
-  const genKinds = ["model", "tool", "vision", "image-gen", "memory", "router"];
+  const genKinds = ["model", "tool", "vision", "image-gen", "memory", "router", "code", "sub-agent"];
   const outputNode = nodes.find((n) => n.data.kind === "output");
   const terminalGenId = outputNode
     ? (edges.find((e) => e.target === outputNode.id)?.source ??
@@ -128,6 +154,26 @@ export async function* executeAgent(
     : [...order].reverse().find((n) => genKinds.includes(n.data.kind))?.id;
 
   let totalTokens = 0;
+  // V2 cost tracking: input vs output token split + the provider that drove
+  // the terminal generation node. Used by /api/agents/[id]/run to compute
+  // USD cost via calculateCost(provider, inputTokens, outputTokens).
+  let inputTokens = 0;
+  let outputTokens = 0;
+  // The provider of the terminal model node — defaults to free-openai so
+  // unknown graphs still produce a $0 cost (free-* models cost nothing).
+  let primaryProvider: string = "free-openai";
+  if (terminalGenId) {
+    const termNode = nodes.find((n) => n.id === terminalGenId);
+    if (termNode?.data.provider) primaryProvider = termNode.data.provider;
+  }
+
+  // Helper: rough input-token estimate for an LLM call. Uses the standard
+  // ~4 chars/token heuristic, includes the system prompt + user context +
+  // recent history. Capped to avoid runaway counts on huge inputs.
+  const estimateInput = (sys: string, userCtx: string) => {
+    const histChars = ctx.history.slice(-6).reduce((s, h) => s + h.content.length, 0);
+    return Math.ceil(Math.min(8000, (sys.length + userCtx.length + histChars) / 4));
+  };
 
   for (const node of order) {
     const data = node.data;
@@ -138,8 +184,37 @@ export async function* executeAgent(
       if (data.kind === "trigger") {
         outputs.set(node.id, ctx.input);
       } else if (data.kind === "knowledge") {
-        const text = data.content || "Knowledge context.";
-        outputs.set(node.id, text);
+        // RAG: if useRAG=true, embed the upstream context and retrieve the
+        // top-K most similar chunks from this agent's document store.
+        // Prepend retrieved chunks to the node's content (if any).
+        if (data.useRAG && ctx.agentId) {
+          const query = incomingContext(node.id) || ctx.input;
+          const topK = Math.max(1, Math.min(10, data.ragTopK ?? 4));
+          try {
+            const chunks = await retrieveContext(ctx.agentId, query, topK);
+            const retrieved = formatRetrievedChunks(chunks);
+            const base = data.content ? data.content.trim() : "";
+            const merged = retrieved
+              ? (base ? `${retrieved}\n\n---\n\n${base}` : retrieved)
+              : base || "No RAG matches found.";
+            outputs.set(node.id, merged);
+            if (chunks.length > 0) {
+              yield {
+                type: "trace",
+                node: node.id,
+                label: `${label}: retrieved ${chunks.length} chunk${chunks.length > 1 ? "s" : ""}`,
+                status: "streaming",
+              };
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "RAG failed";
+            outputs.set(node.id, `[RAG error: ${msg}]\n\n${data.content ?? ""}`.trim());
+            yield { type: "trace", node: node.id, label: `${label}: RAG error`, status: "error" };
+          }
+        } else {
+          const text = data.content || "Knowledge context.";
+          outputs.set(node.id, text);
+        }
       } else if (data.kind === "tool" && data.tool === "web-search") {
         const query = incomingContext(node.id).slice(0, 200) || ctx.input;
         if (!zai) {
@@ -312,6 +387,32 @@ export async function* executeAgent(
           result = `Saved to memory[${key}].`;
         }
         outputs.set(node.id, result);
+      } else if (data.kind === "code") {
+        // Run user-supplied JS in a locked-down vm sandbox.
+        const code = (data.code ?? "").trim();
+        if (!code) {
+          outputs.set(node.id, "[code: empty — write JS in the inspector]");
+        } else {
+          const sandboxInput = incomingContext(node.id);
+          const timeout = Math.min(Math.max(data.codeTimeout ?? 5000, 1000), 30000);
+          const result = await runSandboxed(code, sandboxInput, ctx.history, timeout);
+          // Surface captured console logs as deltas so the user can see them.
+          for (const line of result.consoleLogs) {
+            yield { type: "delta", content: `\n[code] ${line}\n` };
+          }
+          if (result.ok) {
+            const out = result.output ?? "";
+            outputs.set(node.id, out);
+            totalTokens += Math.ceil(out.length / 4);
+          } else {
+            // Sandbox failed — record the error and stop the run.
+            const errMsg = result.error ?? "unknown code error";
+            outputs.set(node.id, `[code error: ${errMsg}]`);
+            yield { type: "trace", node: node.id, label, status: "error" };
+            yield { type: "error", node: node.id, message: `Code node "${label}" failed: ${errMsg}` };
+            return;
+          }
+        }
       } else if (data.kind === "router") {
         // A router doesn't transform data; it passes through upstream and
         // emits a trace note about which branch would be taken. The actual
@@ -326,23 +427,136 @@ export async function* executeAgent(
           : `Routed to default (${data.routerDefault ?? "fall-through"})`;
         outputs.set(node.id, incoming);
         yield { type: "trace", node: node.id, label: `${label}: ${note}`, status: "streaming" };
+      } else if (data.kind === "sub-agent") {
+        // Invoke another agent's full graph as part of this workflow.
+        const subAgentId = data.subAgentId?.trim();
+        const incoming = incomingContext(node.id);
+        const template = data.subAgentInputTemplate ?? "{{input}}";
+        const subInput = template
+          ? template.replace(/\{\{input\}\}/g, incoming.slice(0, 4000))
+          : incoming;
+
+        if (!subAgentId) {
+          // No agent selected — pass through upstream unchanged.
+          outputs.set(node.id, incoming);
+          yield {
+            type: "trace",
+            node: node.id,
+            label: `${label}: no sub-agent configured`,
+            status: "streaming",
+          };
+        } else if (depth >= MAX_SUB_AGENT_DEPTH) {
+          // Recursion cap — refuse to go deeper.
+          outputs.set(
+            node.id,
+            `[sub-agent: max recursion depth (${MAX_SUB_AGENT_DEPTH}) reached — refusing to call ${subAgentId}]`,
+          );
+          yield {
+            type: "trace",
+            node: node.id,
+            label: `${label}: recursion cap hit (depth=${depth})`,
+            status: "streaming",
+          };
+        } else if (callStack.includes(subAgentId)) {
+          // Cycle detection — the same agent appears earlier in the call chain.
+          outputs.set(
+            node.id,
+            `[sub-agent: cycle detected — agent ${subAgentId} is already in the call stack]`,
+          );
+          yield {
+            type: "trace",
+            node: node.id,
+            label: `${label}: cycle detected`,
+            status: "streaming",
+          };
+        } else {
+          // Load the sub-agent from the database and parse its graph.
+          const subAgent = await db.agent
+            .findUnique({ where: { id: subAgentId } })
+            .catch(() => null);
+          if (!subAgent) {
+            outputs.set(node.id, `[sub-agent: agent ${subAgentId} not found]`);
+          } else {
+            let subNodes: WorkflowNode[] = [];
+            let subEdges: WorkflowEdge[] = [];
+            try {
+              subNodes = JSON.parse(subAgent.nodes) as WorkflowNode[];
+              subEdges = JSON.parse(subAgent.edges) as WorkflowEdge[];
+            } catch {
+              outputs.set(
+                node.id,
+                `[sub-agent: failed to parse graph for ${subAgent.name}]`,
+              );
+            }
+
+            if (subNodes.length > 0) {
+              // Surface the sub-agent's name in a trace event so the run view
+              // can show "Calling Sub-Agent X" before it starts.
+              yield {
+                type: "trace",
+                node: node.id,
+                label: `${label}: calling "${subAgent.name}"`,
+                status: "streaming",
+              };
+              // Recursively execute the sub-agent graph. We pass the rendered
+              // input template as the new trigger input, carry history
+              // forward, and bump the recursion depth + call stack.
+              let subFinalOutput = "";
+              let subTokens = 0;
+              for await (const ev of executeAgent(subNodes, subEdges, {
+                input: subInput || ctx.input,
+                history: ctx.history,
+                agentId: subAgent.id,
+                depth: depth + 1,
+                callStack: [...callStack, subAgent.id],
+              })) {
+                if (ev.type === "done") {
+                  subFinalOutput = ev.output ?? "";
+                  subTokens = ev.tokens ?? 0;
+                  // Roll sub-agent cost into parent so the parent /run
+                  // endpoint can bill once for the whole call tree.
+                  inputTokens += ev.inputTokens ?? 0;
+                  outputTokens += ev.outputTokens ?? 0;
+                  // If the parent has no provider yet (e.g. its terminal
+                  // node isn't a model), inherit the sub-agent's provider.
+                  if (primaryProvider === "free-openai" && ev.provider) {
+                    primaryProvider = ev.provider;
+                  }
+                }
+                // Sub-agent trace/delta events are intentionally NOT
+                // forwarded — they would clutter the parent run view. The
+                // parent's trace events above are enough to indicate
+                // progress.
+              }
+              outputs.set(node.id, subFinalOutput || "(sub-agent returned no output)");
+              totalTokens += subTokens;
+            }
+          }
+        }
       } else if (data.kind === "model") {
         const sys = data.systemPrompt || "You are a helpful AI agent.";
         const context = incomingContext(node.id);
         if (node.id === terminalGenId) {
           // Stream this one
           yield { type: "trace", node: node.id, label, status: "streaming" };
+          // Track input tokens for the primary generation call.
+          inputTokens += estimateInput(sys, context);
           let full = "";
           for await (const chunk of streamCompletion(zai, sys, context, data.provider, ctx.history, data)) {
             full += chunk;
             yield { type: "delta", content: chunk };
           }
           outputs.set(node.id, full);
-          totalTokens += Math.ceil(full.length / 4);
+          const out = Math.ceil(full.length / 4);
+          totalTokens += out;
+          outputTokens += out;
         } else {
+          inputTokens += estimateInput(sys, context);
           const out = await runCompletion(zai, sys, context, data.provider, ctx.history, data);
           outputs.set(node.id, out);
-          totalTokens += Math.ceil(out.length / 4);
+          const outTok = Math.ceil(out.length / 4);
+          totalTokens += outTok;
+          outputTokens += outTok;
         }
       } else if (data.kind === "output") {
         const out = upstream(node.id).join("\n\n") || outputs.get(terminalGenId ?? "") || "";
@@ -365,6 +579,9 @@ export async function* executeAgent(
     type: "done",
     output: finalOutput,
     tokens: totalTokens,
+    inputTokens,
+    outputTokens,
+    provider: primaryProvider,
     duration: Date.now() - started,
   };
 }

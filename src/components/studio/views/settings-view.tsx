@@ -18,12 +18,13 @@ import {
 } from "@/components/ui/select";
 import {
   KeyRound, Database, BarChart3, Crown, LogOut, Loader2, Check, Save,
-  Cpu, Zap, AlertTriangle, Trash2, Plus, Shield, Eye, EyeOff, Plug,
+  Cpu, Zap, AlertTriangle, Trash2, Plus, Shield, Eye, EyeOff, Plug, DollarSign,
 } from "lucide-react";
 import { signOut } from "@/lib/firebase";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatTokens } from "@/lib/tokens";
+import { spendLimitForPlan } from "@/lib/pricing";
 import type { CustomApi } from "@/lib/types";
 
 const PROVIDER_OPTIONS = [
@@ -101,6 +102,16 @@ export function SettingsView() {
   const agentLimit = user.maxAgents;
   const agentPct = Math.min(100, Math.round((agentCount / agentLimit) * 100));
   const atAgentLimit = agentCount >= agentLimit;
+  // V2 spend tracking — daily USD spend cap (free=$1, pro=$10, team=$50).
+  // Bar turns amber above 80%, red at 100%.
+  const spendUsedCents = user.spendUsedTodayCents ?? 0;
+  const spendLimitCents = spendLimitForPlan(user.plan);
+  const spendPct = Math.min(
+    100,
+    Math.round((spendUsedCents / Math.max(1, spendLimitCents)) * 100),
+  );
+  const spendBarColor =
+    spendPct >= 100 ? "bg-destructive" : spendPct >= 80 ? "bg-amber-500" : "bg-primary";
 
   async function saveKeys() {
     setSaving(true);
@@ -245,6 +256,27 @@ export function SettingsView() {
                   style={{ width: `${tokenPct}%` }}
                 />
               </div>
+            </div>
+
+            {/* V2 spend tracking — daily USD spend cap (free=$1, pro=$10, team=$50) */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-sm">
+                <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-primary" /> Daily spend</span>
+                <span className="text-muted-foreground">
+                  ${(spendUsedCents / 100).toFixed(2)} / ${(spendLimitCents / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn("h-full rounded-full transition-all", spendBarColor)}
+                  style={{ width: `${spendPct}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {spendPct}% of daily spend limit used.
+                {spendPct >= 100 && " Limit reached — upgrade your plan to keep running."}
+                {spendPct >= 80 && spendPct < 100 && " Approaching the daily spend limit."}
+              </p>
             </div>
 
             <div>

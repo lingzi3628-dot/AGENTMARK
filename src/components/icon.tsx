@@ -4,7 +4,8 @@ import {
   Sparkles, Bot, Brain, Code, PenTool, Search, FileText, Languages,
   Database, Rocket, Lightbulb, Wand2, Play, Wrench, Flag, Globe,
   Tags, Image, Eye, Link, Webhook, Volume2, GitBranch, Send, Hash,
-  MessageSquare, Mail, Smartphone, MessageCircle, type LucideIcon,
+  MessageSquare, Mail, Smartphone, MessageCircle, Network, Phone,
+  type LucideIcon,
 } from "lucide-react";
 
 const MAP: Record<string, LucideIcon> = {
@@ -37,6 +38,8 @@ const MAP: Record<string, LucideIcon> = {
   mail: Mail,
   smartphone: Smartphone,
   "message-circle": MessageCircle,
+  network: Network,
+  phone: Phone,
 };
 
 export function Icon({

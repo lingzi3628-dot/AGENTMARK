@@ -25,6 +25,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       status: body.status ?? "completed",
       tokens: body.tokens ?? 0,
       duration: body.duration ?? 0,
+      // V2 cost tracking — populated from the SSE __cost__ event emitted by
+      // /api/agents/[id]/run. The client forwards costCents + source here
+      // when persisting the run record. Defaults to 0 cents + "manual"
+      // source so older clients still work.
+      costCents: typeof body.costCents === "number" ? body.costCents : 0,
+      source: typeof body.source === "string" && body.source ? body.source : "manual",
     },
   });
   return NextResponse.json(toRun(created), { status: 201 });

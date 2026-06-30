@@ -4,21 +4,34 @@ import { useState } from "react";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AIBuilderModal } from "@/components/studio/ai-builder-modal";
-import { Menu, Plus, Sun, Moon, Sparkles } from "lucide-react";
+import { Menu, Plus, Sun, Moon, Globe } from "lucide-react";
 import type { StudioView } from "@/lib/types";
+import { LOCALES, LOCALE_NAMES, getStoredLocale, setStoredLocale, type Locale } from "@/lib/i18n";
 
 const TITLES: Record<StudioView, { title: string; sub: string }> = {
   dashboard: { title: "Dashboard", sub: "Your agents and recent activity" },
   studio: { title: "Studio", sub: "Design agents on a visual canvas" },
   run: { title: "Run", sub: "Execute an agent and chat" },
   templates: { title: "Templates", sub: "Start from a pre-built agent" },
+  marketplace: { title: "Marketplace", sub: "Browse community agents" },
   knowledge: { title: "Knowledge", sub: "Documents and context for your agents" },
   publish: { title: "Publish", sub: "Embed your agent on any website" },
   integrations: { title: "Integrations", sub: "Connect agents to your platforms" },
+  schedules: { title: "Schedules", sub: "Auto-run agents on a cron schedule" },
+  history: { title: "History", sub: "Version history & branches" },
   customer: { title: "Customer Mode", sub: "AI-generated talking points & message drafts" },
   analytics: { title: "Analytics", sub: "Usage, tokens, and trends" },
   billing: { title: "Billing", sub: "Plans, pricing, and your subscription" },
+  teams: { title: "Teams", sub: "Shared workspaces & members" },
+  "api-keys": { title: "API Keys", sub: "Programmatic access for developers" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 
@@ -26,7 +39,18 @@ export function Topbar() {
   const { view, theme, toggleTheme, setSidebarOpen, setView } = useStudio();
   const { user } = useAuth();
   const [builderOpen, setBuilderOpen] = useState(false);
+  // Lazy init: reads localStorage on first client render (avoids set-state-in-effect)
+  const [locale, setLocale] = useState<Locale>(() =>
+    typeof window === "undefined" ? "en" : getStoredLocale(),
+  );
   const t = TITLES[view];
+
+  function changeLocale(l: Locale) {
+    setLocale(l);
+    setStoredLocale(l);
+    // Reload to apply translations
+    if (typeof window !== "undefined") window.location.reload();
+  }
 
   return (
     <>
@@ -47,6 +71,21 @@ export function Topbar() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Language picker */}
+          <Select value={locale} onValueChange={(v) => changeLocale(v as Locale)}>
+            <SelectTrigger className="h-9 w-[40px] justify-center border-none px-0 sm:w-[110px]" aria-label="Language">
+              <Globe className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline truncate">{LOCALE_NAMES[locale]}</span>
+            </SelectTrigger>
+            <SelectContent>
+              {LOCALES.map((l) => (
+                <SelectItem key={l} value={l}>
+                  {LOCALE_NAMES[l]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Button
             variant="ghost"
             size="icon"

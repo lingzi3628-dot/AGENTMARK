@@ -13,6 +13,8 @@ import {
   BookOpen,
   ExternalLink,
   ChevronDown,
+  RefreshCw,
+  PhoneCall,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogClose,
@@ -56,6 +59,16 @@ export function IntegrationsView() {
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [showProcedure, setShowProcedure] = useState(false);
   const [guidePlatform, setGuidePlatform] = useState<string | null>(null);
+
+  // --- Email "Test poll" state ---
+  const [testingPollId, setTestingPollId] = useState<string | null>(null);
+
+  // --- Voice "Test call" state ---
+  const [testCallOpen, setTestCallOpen] = useState(false);
+  const [testCallIntegration, setTestCallIntegration] = useState<Integration | null>(null);
+  const [testCallTo, setTestCallTo] = useState("");
+  const [testCallMessage, setTestCallMessage] = useState("");
+  const [testCallSending, setTestCallSending] = useState(false);
 
   const fetchIntegrations = useCallback(async (agentId: string) => {
     setLoading(true);
@@ -221,6 +234,88 @@ export function IntegrationsView() {
     setView("studio");
   }
 
+  // --- Email: trigger /api/email/poll?integrationId=xxx ---
+  async function handleTestPoll(integration: Integration) {
+    setTestingPollId(integration.id);
+    const toastId = toast.loading("Polling inbox for new emails…");
+    try {
+      const res = await fetch(`/api/email/poll?integrationId=${encodeURIComponent(integration.id)}`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(`Poll failed: ${data.error || res.statusText}`, { id: toastId });
+        return;
+      }
+      const processed = typeof data.processed === "number" ? data.processed : 0;
+      const total = typeof data.integrations === "number" ? data.integrations : 0;
+      if (processed > 0) {
+        toast.success(`Polled ${total} inbox(es) — replied to ${processed} email(s).`, { id: toastId });
+      } else {
+        toast.info(`Poll complete — no new unread emails. (${data.errors?.length || 0} errors)`, { id: toastId });
+      }
+      // Refresh the monitoring panel so the new MessageLogs show up
+      if (activeAgent) await fetchIntegrations(activeAgent.id);
+    } catch (e) {
+      toast.error(`Poll failed: ${e instanceof Error ? e.message : "network error"}`, { id: toastId });
+    } finally {
+      setTestingPollId(null);
+    }
+  }
+
+  // --- Voice: open the test-call dialog ---
+  function openTestCallDialog(integration: Integration) {
+    setTestCallIntegration(integration);
+    setTestCallTo("");
+    setTestCallMessage(
+      `Hello, this is ${activeAgent?.name ?? "your agent"} calling with an automated message. This is a test call.`,
+    );
+    setTestCallOpen(true);
+  }
+
+  async function handleSendTestCall() {
+    if (!testCallIntegration) return;
+    const to = testCallTo.trim();
+    const message = testCallMessage.trim();
+    if (!to) {
+      toast.error("Please enter a phone number to call.");
+      return;
+    }
+    if (!to.startsWith("+")) {
+      toast.error("Phone number must be in E.164 format (starts with +, e.g. +14155551234).");
+      return;
+    }
+    if (!message) {
+      toast.error("Please enter a message to speak.");
+      return;
+    }
+    setTestCallSending(true);
+    const toastId = toast.loading(`Calling ${to}…`);
+    try {
+      const res = await fetch("/api/voice/outbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          integrationId: testCallIntegration.id,
+          to,
+          message,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(`Call failed: ${data.error || res.statusText}`, { id: toastId });
+        return;
+      }
+      toast.success(`Call placed to ${to} — SID: ${data.callSid?.slice(0, 12) ?? "(unknown)"}…`, { id: toastId });
+      setTestCallOpen(false);
+      if (activeAgent) await fetchIntegrations(activeAgent.id);
+    } catch (e) {
+      toast.error(`Call failed: ${e instanceof Error ? e.message : "network error"}`, { id: toastId });
+    } finally {
+      setTestCallSending(false);
+    }
+  }
+
   // ---------------- No active agent: picker ----------------
   if (!activeAgent) {
     return (
@@ -355,6 +450,35 @@ export function IntegrationsView() {
                         <Settings2 className="h-3.5 w-3.5" />
                         Manage
                       </Button>
+                      {/* Platform-specific test actions */}
+                      {platform.id === "email" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleTestPoll(integration)}
+                          disabled={testingPollId === integration.id || !integration.enabled}
+                          title="Poll the inbox now and reply to any unread emails"
+                        >
+                          {testingPollId === integration.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                          Test poll
+                        </Button>
+                      )}
+                      {platform.id === "voice" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openTestCallDialog(integration)}
+                          disabled={!integration.enabled}
+                          title="Place an outbound test call"
+                        >
+                          <PhoneCall className="h-3.5 w-3.5" />
+                          Test call
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -444,6 +568,27 @@ export function IntegrationsView() {
               if (!platform) return null;
               const isToggling = togglingId === integration.id;
               const switchId = `switch-${integration.id}`;
+              // Platform-specific subtitle: show the most useful identifier.
+              let subtitle = "";
+              if (integration.platform === "email") {
+                const emailHost = integration.config?.imapHost || "";
+                const emailUser = integration.config?.emailAddress || "";
+                subtitle = emailUser && emailHost
+                  ? `${emailUser} · ${emailHost}`
+                  : emailUser || emailHost || "—";
+              } else if (integration.platform === "voice" || integration.platform === "sms") {
+                subtitle = integration.config?.fromNumber || "—";
+              } else if (integration.platform === "telegram") {
+                subtitle = integration.config?.botToken
+                  ? `Bot token: ${integration.config.botToken.slice(0, 10)}…`
+                  : "";
+              } else if (integration.platform === "whatsapp") {
+                subtitle = integration.config?.phoneNumberId || "";
+              } else if (integration.platform === "slack") {
+                subtitle = integration.config?.botToken
+                  ? `Bot token: ${integration.config.botToken.slice(0, 10)}…`
+                  : "";
+              }
               return (
                 <li
                   key={integration.id}
@@ -470,6 +615,10 @@ export function IntegrationsView() {
                       ) : null}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
+                      {subtitle ? (
+                        <span className="text-foreground/70">{subtitle}</span>
+                      ) : null}
+                      {subtitle ? <span className="mx-1.5 text-muted-foreground/50">•</span> : null}
                       Connected{" "}
                       {formatDistanceToNow(new Date(integration.createdAt), {
                         addSuffix: true,
@@ -477,6 +626,37 @@ export function IntegrationsView() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Platform-specific quick actions */}
+                    {integration.platform === "email" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => handleTestPoll(integration)}
+                        disabled={testingPollId === integration.id || !integration.enabled}
+                        title="Poll inbox now"
+                      >
+                        {testingPollId === integration.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        <span className="ml-1 hidden sm:inline">Poll</span>
+                      </Button>
+                    )}
+                    {integration.platform === "voice" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => openTestCallDialog(integration)}
+                        disabled={!integration.enabled}
+                        title="Place test call"
+                      >
+                        <PhoneCall className="h-3.5 w-3.5" />
+                        <span className="ml-1 hidden sm:inline">Call</span>
+                      </Button>
+                    )}
                     <Label
                       htmlFor={switchId}
                       className="sr-only"
@@ -695,6 +875,86 @@ export function IntegrationsView() {
             >
               <Plug className="h-4 w-4" />
               Connect now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Voice Test call dialog */}
+      <Dialog
+        open={testCallOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setTestCallOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-500">
+                <PhoneCall className="h-3.5 w-3.5" />
+              </span>
+              Place a test call
+            </DialogTitle>
+            <DialogDescription>
+              Your Twilio number{" "}
+              <span className="font-mono text-foreground/80">
+                {testCallIntegration?.config?.fromNumber || "(unknown)"}
+              </span>{" "}
+              will call the number you enter below and speak the message using Polly TTS.
+              Trial Twilio accounts can only call verified numbers.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="test-call-to">To number (E.164)</Label>
+              <Input
+                id="test-call-to"
+                type="tel"
+                placeholder="+14155551234"
+                value={testCallTo}
+                onChange={(e) => setTestCallTo(e.target.value)}
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Must start with <code className="rounded bg-muted px-1">+</code> and country code.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="test-call-msg">Message to speak</Label>
+              <Textarea
+                id="test-call-msg"
+                rows={4}
+                placeholder="Hello, this is an automated message from your agent."
+                value={testCallMessage}
+                onChange={(e) => setTestCallMessage(e.target.value)}
+                maxLength={1000}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {testCallMessage.length}/1000 chars · Twilio Polly will speak this when the call connects.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={testCallSending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={handleSendTestCall}
+              disabled={testCallSending || !testCallTo.trim() || !testCallMessage.trim()}
+            >
+              {testCallSending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PhoneCall className="h-4 w-4" />
+              )}
+              Place call
             </Button>
           </DialogFooter>
         </DialogContent>

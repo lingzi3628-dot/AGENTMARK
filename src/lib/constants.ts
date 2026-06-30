@@ -112,8 +112,17 @@ export const NODE_PALETTE = [
   { kind: "knowledge", label: "Knowledge", icon: "database", desc: "Injects documents as context" },
   { kind: "memory", label: "Memory", icon: "brain", desc: "Save and recall values across runs" },
   { kind: "router", label: "Router", icon: "git-branch", desc: "Branch the workflow by keyword" },
+  { kind: "code", label: "Code", icon: "code", desc: "Run custom JavaScript in a sandbox" },
   { kind: "image-gen", label: "Image Generator", icon: "image", desc: "Creates images from a text prompt" },
   { kind: "vision", label: "Vision", icon: "eye", desc: "Understands images with GLM-4.5V" },
+  {
+    kind: "sub-agent",
+    label: "Sub-Agent",
+    icon: "network",
+    desc: "Call another agent as part of this workflow",
+    color: "violet",
+    defaultData: { label: "Sub-Agent", subAgentId: "", subAgentInputTemplate: "{{input}}" },
+  },
   { kind: "output", label: "Output", icon: "flag", desc: "Returns the final result" },
 ] as const;
 
@@ -131,7 +140,7 @@ export interface PlatformDef {
   icon: string;
   color: string;
   description: string;
-  fields: { key: string; label: string; placeholder: string; type?: "text" | "password" | "url" }[];
+  fields: { key: string; label: string; placeholder: string; type?: "text" | "password" | "url" | "tel" }[];
   procedure: { title: string; body: string }[];
   docsUrl?: string;
 }
@@ -259,11 +268,13 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "email", name: "Email", icon: "mail", color: "bg-amber-500/15 text-amber-500",
-    description: "Auto-reply to incoming emails via SMTP/IMAP.",
+    description: "Auto-reply to incoming emails via SMTP/IMAP. Polled every 5 minutes.",
     fields: [
       { key: "emailAddress", label: "Inbox address", placeholder: "support@yourco.com", type: "text" },
       { key: "imapHost", label: "IMAP host", placeholder: "imap.gmail.com", type: "text" },
+      { key: "imapPort", label: "IMAP port", placeholder: "993 (default)", type: "text" },
       { key: "smtpHost", label: "SMTP host", placeholder: "smtp.gmail.com", type: "text" },
+      { key: "smtpPort", label: "SMTP port", placeholder: "465 (default)", type: "text" },
       { key: "password", label: "App password", placeholder: "••••", type: "password" },
     ],
     docsUrl: "https://support.google.com/mail/answer/185833",
@@ -271,28 +282,49 @@ export const PLATFORMS: PlatformDef[] = [
       { title: "Use a dedicated email account", body: "Create a dedicated inbox (e.g. support@yourco.com or a Gmail account). Don't use your personal email — the agent will reply to all incoming messages." },
       { title: "Enable IMAP access", body: "In Gmail: Settings → See all settings → Forwarding and POP/IMAP → enable IMAP. For other providers, find the IMAP setting in your mail settings." },
       { title: "Generate an App Password", body: "For Gmail: go to myaccount.google.com → Security → 2-Step Verification → App passwords → generate one for 'Mail'. For other providers, use your regular password or generate an app-specific password." },
-      { title: "Find your IMAP/SMTP hosts", body: "Gmail: imap.gmail.com and smtp.gmail.com. Outlook: outlook.office365.com and smtp.office365.com. Check your provider's docs for custom domains." },
-      { title: "Enter credentials here", body: "Fill in the inbox address, IMAP host, SMTP host, and app password. Click Connect. The system polls your inbox and auto-replies using your agent." },
-      { title: "Test it", body: "Send a test email to your agent's inbox from a different account. Within a minute, your agent will reply automatically." },
+      { title: "Find your IMAP/SMTP hosts", body: "Gmail: imap.gmail.com and smtp.gmail.com. Outlook: outlook.office365.com and smtp.office365.com. Check your provider's docs for custom domains. Default ports: 993 for IMAP (TLS), 465 for SMTP (TLS)." },
+      { title: "Enter credentials here", body: "Fill in the inbox address, IMAP host, SMTP host, and app password. Ports are optional — leave blank for defaults (993 / 465). Click Connect — we validate the credentials by opening a test IMAP + SMTP connection." },
+      { title: "Auto-polling is automatic", body: "Once connected, we poll your inbox every 5 minutes for new unread messages. For each, we run the agent, send an AI-drafted reply via SMTP (with proper In-Reply-To threading), and mark the original as read. No further setup needed!" },
+      { title: "Test it manually", body: "After connecting, use the 'Test poll' button on the integration card to fetch + reply immediately. Send a test email from a different account and watch the reply arrive within seconds." },
     ],
   },
   {
     id: "sms", name: "SMS (Twilio)", icon: "smartphone", color: "bg-rose-500/15 text-rose-500",
-    description: "Send and receive SMS via Twilio.",
+    description: "Send and receive SMS via Twilio. Same account works for Voice.",
     fields: [
       { key: "accountSid", label: "Account SID", placeholder: "AC...", type: "text" },
       { key: "authToken", label: "Auth Token", placeholder: "••••", type: "password" },
-      { key: "fromNumber", label: "From number", placeholder: "+1...", type: "text" },
+      { key: "fromNumber", label: "From number", placeholder: "+1...", type: "tel" },
     ],
     docsUrl: "https://www.twilio.com/docs/sms/quickstart",
     procedure: [
-      { title: "Create a Twilio account", body: "Sign up at twilio.com/try-twilio. You get a free trial with $15 credit — enough for testing." },
+      { title: "Create a Twilio account", body: "Sign up at twilio.com/try-twilio. You get a free trial with $15 credit — enough for testing. The same Twilio account can also be used for Voice (see the Voice platform card)." },
       { title: "Get a phone number", body: "In the Twilio console → 'Phone Numbers' → 'Buy a number' (or use the trial number). Choose one with SMS capability. Copy the number (E.164 format, e.g. +1234567890)." },
       { title: "Copy your Account SID", body: "On the Twilio console dashboard, copy your 'Account SID' (starts with AC...). This identifies your account." },
       { title: "Copy your Auth Token", body: "On the same dashboard, copy your 'Auth Token' (click the eye icon to reveal). Keep this secret — it authenticates all API calls." },
       { title: "Configure the webhook", body: "In 'Phone Numbers' → 'Active numbers' → click your number → 'Messaging' section. Set 'A Message Comes In' to: Webhook, URL: https://your-domain.com/api/webhooks/sms, method: POST." },
       { title: "Enter credentials here", body: "Paste your Account SID, Auth Token, and From Number (+1...) into the fields, then click Connect. Send an SMS to your Twilio number and the agent will reply!" },
       { title: "Upgrade from trial (optional)", body: "Trial accounts can only text verified numbers. Upgrade your account to text any number. Twilio charges ~$0.0079 per SMS in the US." },
+    ],
+  },
+  {
+    id: "voice", name: "Voice (Twilio)", icon: "phone", color: "bg-emerald-500/15 text-emerald-500",
+    description: "Answer inbound phone calls with AI. Caller speaks → STT → agent → TTS → reply. Same Twilio account as SMS.",
+    fields: [
+      { key: "accountSid", label: "Account SID", placeholder: "AC...", type: "text" },
+      { key: "authToken", label: "Auth Token", placeholder: "••••", type: "password" },
+      { key: "fromNumber", label: "From number", placeholder: "+1234567890", type: "tel" },
+    ],
+    docsUrl: "https://www.twilio.com/docs/voice",
+    procedure: [
+      { title: "Use your existing Twilio account", body: "If you've already set up the SMS integration above, you can re-use the same Account SID, Auth Token, and phone number — Twilio lets one number handle both SMS and Voice. Otherwise, sign up at twilio.com/try-twilio." },
+      { title: "Buy a voice-capable number", body: "In the Twilio console → 'Phone Numbers' → 'Buy a number'. Make sure it has the Voice capability checked (most do). Copy the number in E.164 format (e.g. +1234567890)." },
+      { title: "Copy your Account SID + Auth Token", body: "From the Twilio console dashboard. Same credentials as SMS — they work for both." },
+      { title: "Enter credentials here", body: "Paste your Account SID, Auth Token, and From Number into the fields, then click Connect. We validate the credentials against Twilio's API before saving." },
+      { title: "Configure the voice webhook", body: "In 'Phone Numbers' → 'Active numbers' → click your number → 'Voice & Fax' section. Set 'A Call Comes In' to: Webhook, URL: https://your-domain.com/api/voice/incoming?i={integrationId}, method: POST. Replace {integrationId} with the ID shown in your integration list after connecting. (We surface the full URL in the success toast.)" },
+      { title: "How it works", body: "When someone calls your number, Twilio hits our /api/voice/incoming endpoint, which returns TwiML with a greeting + <Gather input='speech'>. The caller speaks, Twilio transcribes it, and POSTs the transcript to /api/voice/process. We run your agent on the transcript and respond with TwiML <Say> of the agent's reply. The loop continues until the caller says 'goodbye' or hangs up." },
+      { title: "Test an outbound call", body: "After connecting, use the 'Test call' button on the integration card. Enter any phone number (must be a verified number on trial accounts) and a short message — your Twilio number will call and speak the message. Great for appointment reminders." },
+      { title: "Pricing", body: "Twilio Voice charges ~$0.0085/min for inbound + ~$0.014/min for outbound calls in the US. Speech recognition (STT via <Gather>) is included free with the call. TTS via <Say> uses Polly voices — also included." },
     ],
   },
 ];

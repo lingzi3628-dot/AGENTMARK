@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
   Sparkles, ChevronRight, X, Plug, Settings, MessagesSquare, BarChart3, Crown,
+  KeyRound, Users, Clock, GitBranch, Store,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -14,12 +15,17 @@ const NAV: { id: StudioView; label: string; icon: typeof LayoutDashboard; desc: 
   { id: "studio", label: "Studio", icon: Workflow, desc: "Visual agent builder" },
   { id: "run", label: "Run", icon: Play, desc: "Execute & chat" },
   { id: "templates", label: "Templates", icon: LayoutTemplate, desc: "Pre-built agents" },
+  { id: "marketplace", label: "Marketplace", icon: Store, desc: "Community agents" },
   { id: "knowledge", label: "Knowledge", icon: Database, desc: "Context & documents" },
   { id: "publish", label: "Publish", icon: Rocket, desc: "Embed on any website" },
   { id: "integrations", label: "Integrations", icon: Plug, desc: "Connect to platforms" },
+  { id: "schedules", label: "Schedules", icon: Clock, desc: "Cron jobs & triggers" },
+  { id: "history", label: "History", icon: GitBranch, desc: "Versions & branches" },
   { id: "customer", label: "Customer Mode", icon: MessagesSquare, desc: "AI talking points & drafts" },
   { id: "analytics", label: "Analytics", icon: BarChart3, desc: "Usage & token trends" },
   { id: "billing", label: "Billing", icon: Crown, desc: "Plans & pricing" },
+  { id: "teams", label: "Teams", icon: Users, desc: "Shared workspaces" },
+  { id: "api-keys", label: "API Keys", icon: KeyRound, desc: "Developer access" },
 ];
 
 export function Sidebar() {

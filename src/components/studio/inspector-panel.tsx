@@ -12,11 +12,12 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, X, Settings2, Cpu, Upload, Link2, Plus } from "lucide-react";
+import { Trash2, X, Settings2, Cpu, Upload, Link2, Plus, Play, Loader2, AlertTriangle, Sparkles } from "lucide-react";
 import { MODELS, TOOLS, IMAGE_SIZES } from "@/lib/constants";
 import { estimateNodeTokens, formatTokens } from "@/lib/tokens";
-import type { NodeKind, KnowledgeItem } from "@/lib/types";
+import type { NodeKind, KnowledgeItem, Agent } from "@/lib/types";
 
 const KIND_LABEL: Record<NodeKind, string> = {
   trigger: "Trigger Node",
@@ -27,11 +28,13 @@ const KIND_LABEL: Record<NodeKind, string> = {
   vision: "Vision Node",
   router: "Router Node",
   memory: "Memory Node",
+  "sub-agent": "Sub-Agent Node",
+  code: "Code Node",
   output: "Output Node",
 };
 
 export function InspectorPanel() {
-  const { nodes, selectedNodeId, setSelectedNode, updateNodeData, removeNode } = useStudio();
+  const { nodes, selectedNodeId, setSelectedNode, updateNodeData, removeNode, activeAgent } = useStudio();
   const node = nodes.find((n) => n.id === selectedNodeId);
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
 
@@ -310,6 +313,27 @@ export function InspectorPanel() {
           </div>
         )}
 
+        {d.kind === "code" && (
+          <CodeEditor
+            value={d.code ?? ""}
+            timeout={d.codeTimeout ?? 5000}
+            onChange={(code) => updateNodeData(node.id, { code })}
+            onTimeoutChange={(t) => updateNodeData(node.id, { codeTimeout: t })}
+          />
+        )}
+
+        {d.kind === "sub-agent" && (
+          <SubAgentEditor
+            value={d.subAgentId ?? ""}
+            template={d.subAgentInputTemplate ?? "{{input}}"}
+            currentAgentId={activeAgent?.id}
+            onChange={(subAgentId) => updateNodeData(node.id, { subAgentId })}
+            onTemplateChange={(subAgentInputTemplate) =>
+              updateNodeData(node.id, { subAgentInputTemplate })
+            }
+          />
+        )}
+
         {d.kind === "router" && (
           <div className="space-y-2.5">
             <Label className="text-xs">Routing conditions</Label>
@@ -350,44 +374,95 @@ export function InspectorPanel() {
         )}
 
         {d.kind === "knowledge" && (
-          <div className="space-y-2">
-            <Label className="text-xs">Link knowledge items</Label>
-            {knowledge.length === 0 ? (
-              <p className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
-                No knowledge items yet. Add some in the Knowledge tab.
-              </p>
-            ) : (
-              <div className="max-h-40 space-y-1 overflow-y-auto studio-scroll">
-                {knowledge.map((k) => {
-                  const linked = d.knowledgeIds?.includes(k.id);
-                  return (
-                    <button
-                      key={k.id}
-                      onClick={() => toggleKnowledge(k.id)}
-                      className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
-                        linked ? "border-primary/50 bg-primary/10" : "border-border hover:bg-accent"
-                      }`}
-                    >
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${linked ? "bg-primary" : "bg-muted-foreground/40"}`} />
-                      <span className="truncate">{k.title}</span>
-                      {linked && <Badge variant="default" className="ml-auto h-4 px-1 text-[9px]">linked</Badge>}
-                    </button>
-                  );
-                })}
+          <div className="space-y-3">
+            {/* Use RAG switch — enables semantic retrieval over uploaded docs */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  <Label htmlFor="use-rag" className="text-xs font-medium">
+                    Use RAG (semantic search)
+                  </Label>
+                </div>
+                <Switch
+                  id="use-rag"
+                  checked={!!d.useRAG}
+                  onCheckedChange={(v) => updateNodeData(node.id, { useRAG: v })}
+                />
               </div>
-            )}
-            <Label className="text-xs pt-1">Or paste raw content</Label>
-            <Textarea
-              value={d.content ?? ""}
-              onChange={(e) => updateNodeData(node.id, { content: e.target.value, knowledgeIds: [] })}
-              placeholder="Paste documents, context, or reference text…"
-              rows={5}
-              className="text-sm"
-            />
-            {linkedKnowledge.length > 0 && (
-              <p className="text-[11px] text-muted-foreground">
-                {linkedKnowledge.length} item{linkedKnowledge.length > 1 ? "s" : ""} linked · {formatTokens(linkedKnowledge.reduce((s, k) => s + k.content.length, 0) / 4)} tokens
-              </p>
+              {d.useRAG && (
+                <>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    RAG will retrieve from this agent's uploaded documents — the raw
+                    content field below is ignored at run time. Upload docs in the
+                    Knowledge tab.
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Label htmlFor="rag-topk" className="text-[11px] text-muted-foreground shrink-0">
+                      Top K
+                    </Label>
+                    <Input
+                      id="rag-topk"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={d.ragTopK ?? 4}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (Number.isFinite(v)) {
+                          updateNodeData(node.id, { ragTopK: Math.max(1, Math.min(10, v)) });
+                        }
+                      }}
+                      className="h-7 w-16 text-xs"
+                    />
+                    <span className="text-[11px] text-muted-foreground">chunks (1-10)</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Linked knowledge items — shown only when RAG is off (RAG uses uploaded docs instead) */}
+            {!d.useRAG && (
+              <>
+                <Label className="text-xs">Link knowledge items</Label>
+                {knowledge.length === 0 ? (
+                  <p className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
+                    No knowledge items yet. Add some in the Knowledge tab.
+                  </p>
+                ) : (
+                  <div className="max-h-40 space-y-1 overflow-y-auto studio-scroll">
+                    {knowledge.map((k) => {
+                      const linked = d.knowledgeIds?.includes(k.id);
+                      return (
+                        <button
+                          key={k.id}
+                          onClick={() => toggleKnowledge(k.id)}
+                          className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
+                            linked ? "border-primary/50 bg-primary/10" : "border-border hover:bg-accent"
+                          }`}
+                        >
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${linked ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                          <span className="truncate">{k.title}</span>
+                          {linked && <Badge variant="default" className="ml-auto h-4 px-1 text-[9px]">linked</Badge>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <Label className="text-xs pt-1">Or paste raw content</Label>
+                <Textarea
+                  value={d.content ?? ""}
+                  onChange={(e) => updateNodeData(node.id, { content: e.target.value, knowledgeIds: [] })}
+                  placeholder="Paste documents, context, or reference text…"
+                  rows={5}
+                  className="text-sm"
+                />
+                {linkedKnowledge.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {linkedKnowledge.length} item{linkedKnowledge.length > 1 ? "s" : ""} linked · {formatTokens(linkedKnowledge.reduce((s, k) => s + k.content.length, 0) / 4)} tokens
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -491,6 +566,283 @@ function iconFor(kind: NodeKind): string {
     case "vision": return "eye";
     case "router": return "git-branch";
     case "memory": return "brain";
+    case "sub-agent": return "network";
+    case "code": return "code";
     case "output": return "flag";
+    default: return "sparkles";
   }
+}
+
+interface SandboxTestResult {
+  ok: boolean;
+  output?: string;
+  error?: string;
+  consoleLogs: string[];
+}
+
+function CodeEditor({
+  value,
+  timeout,
+  onChange,
+  onTimeoutChange,
+}: {
+  value: string;
+  timeout: number;
+  onChange: (code: string) => void;
+  onTimeoutChange: (ms: number) => void;
+}) {
+  const [sampleInput, setSampleInput] = useState("hello world");
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<SandboxTestResult | null>(null);
+
+  async function runTest() {
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/sandbox/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: value,
+          input: sampleInput,
+          timeoutMs: timeout,
+        }),
+      });
+      const data = (await res.json()) as SandboxTestResult;
+      setResult(data);
+    } catch (err) {
+      setResult({
+        ok: false,
+        error: err instanceof Error ? err.message : "request failed",
+        consoleLogs: [],
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">JavaScript</Label>
+          <span className="text-[10px] text-muted-foreground">vm sandbox</span>
+        </div>
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={"// Available: input, history, fetch, console\nreturn input.toUpperCase();"}
+          rows={9}
+          className="font-mono text-xs leading-relaxed"
+          spellCheck={false}
+        />
+        <p className="rounded-md bg-amber-500/10 p-2 text-[11px] text-amber-600 dark:text-amber-400">
+          Available: <code className="font-mono">input</code>,{" "}
+          <code className="font-mono">history</code>,{" "}
+          <code className="font-mono">fetch</code>,{" "}
+          <code className="font-mono">console</code>,{" "}
+          <code className="font-mono">JSON</code>,{" "}
+          <code className="font-mono">Date</code>,{" "}
+          <code className="font-mono">Math</code>. Wrap in <code className="font-mono">async</code>; return a value or string.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Timeout (ms)</Label>
+        <Input
+          type="number"
+          min={1000}
+          max={30000}
+          step={500}
+          value={timeout}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (!Number.isNaN(v)) onTimeoutChange(Math.min(Math.max(v, 1000), 30000));
+          }}
+          className="h-8 text-sm"
+        />
+      </div>
+
+      <Separator />
+      <div className="space-y-1.5">
+        <Label className="text-xs">Test with sample input</Label>
+        <div className="flex gap-1.5">
+          <Input
+            value={sampleInput}
+            onChange={(e) => setSampleInput(e.target.value)}
+            placeholder="sample input"
+            className="h-8 text-xs"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            onClick={runTest}
+            disabled={testing || !value.trim()}
+          >
+            {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            Test
+          </Button>
+        </div>
+      </div>
+
+      {result && (
+        <div
+          className={`rounded-md border p-2.5 text-[11px] ${
+            result.ok
+              ? "border-emerald-500/30 bg-emerald-500/10"
+              : "border-destructive/30 bg-destructive/10"
+          }`}
+        >
+          {result.ok ? (
+            <>
+              <div className="mb-1 font-medium text-emerald-600 dark:text-emerald-400">Output</div>
+              <pre className="whitespace-pre-wrap break-all font-mono text-[11px] text-foreground">
+                {result.output ?? "(empty)"}
+              </pre>
+            </>
+          ) : (
+            <>
+              <div className="mb-1 font-medium text-destructive">Error</div>
+              <pre className="whitespace-pre-wrap break-all font-mono text-[11px] text-destructive">
+                {result.error}
+              </pre>
+            </>
+          )}
+          {result.consoleLogs.length > 0 && (
+            <>
+              <div className="mt-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Console</div>
+              <pre className="whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">
+                {result.consoleLogs.join("\n")}
+              </pre>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubAgentEditor({
+  value,
+  template,
+  currentAgentId,
+  onChange,
+  onTemplateChange,
+}: {
+  value: string;
+  template: string;
+  currentAgentId?: string;
+  onChange: (id: string) => void;
+  onTemplateChange: (t: string) => void;
+}) {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Note: `loading` is initialised to `true` above, so we don't need to
+    // call setLoading(true) here synchronously — that triggers a cascading
+    // render lint warning. We only flip it back to false once the fetch
+    // resolves (in the .finally() below).
+    fetch("/api/agents")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: Agent[]) => {
+        if (cancelled) return;
+        setAgents(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAgents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Exclude the current agent from the list to prevent infinite loops at
+  // the picker level (we still keep the warning below for safety in case
+  // the value was set through import/paste).
+  const selectable = agents.filter((a) => a.id !== currentAgentId);
+  const selected = agents.find((a) => a.id === value);
+  const isSelf = !!value && value === currentAgentId;
+  const isEmpty = !value;
+
+  return (
+    <div className="space-y-2.5">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Agent to invoke</Label>
+        {loading ? (
+          <div className="flex h-8 items-center gap-2 rounded-md border border-border px-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading agents…
+          </div>
+        ) : selectable.length === 0 ? (
+          <p className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
+            No other agents available. Create a second agent first — sub-agents
+            can&apos;t call themselves.
+          </p>
+        ) : (
+          <Select value={value} onValueChange={onChange}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue placeholder="Pick an agent…" />
+            </SelectTrigger>
+            <SelectContent>
+              {selectable.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  <span className="font-medium">{a.name}</span>
+                  <span className="ml-1.5 text-xs text-muted-foreground">
+                    {a.nodes.length} nodes
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {selected && (
+          <p className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">{selected.name}</span>
+            {selected.description ? ` — ${selected.description}` : ""}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Input template</Label>
+        <Input
+          value={template}
+          onChange={(e) => onTemplateChange(e.target.value)}
+          placeholder="{{input}}"
+          className="h-8 font-mono text-xs"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Use <code className="rounded bg-muted px-1">{`{{input}}`}</code> to
+          inject upstream text. The rendered string becomes the sub-agent&apos;s
+          trigger input.
+        </p>
+      </div>
+
+      {isEmpty && (
+        <div className="flex items-start gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>No agent selected. This node will pass through its input unchanged.</span>
+        </div>
+      )}
+      {isSelf && (
+        <div className="flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-[11px] text-destructive">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            This sub-agent points to the current agent — running it would cause
+            an infinite loop. The runtime refuses to recurse deeper than 3
+            levels, but you should pick a different agent.
+          </span>
+        </div>
+      )}
+      <p className="rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
+        The sub-agent&apos;s full graph runs (topological order) and its final
+        output becomes this node&apos;s output. Recursion is capped at 3 levels.
+      </p>
+    </div>
+  );
 }

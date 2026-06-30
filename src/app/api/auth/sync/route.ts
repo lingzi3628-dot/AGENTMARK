@@ -38,11 +38,16 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Reset daily tokens if it's a new day
+  // Reset daily tokens + spend if it's a new day
   if (user.tokenResetDate !== today) {
     user = await db.user.update({
       where: { id: user.id },
-      data: { tokensUsedToday: 0, tokenResetDate: today },
+      data: {
+        tokensUsedToday: 0,
+        tokenResetDate: today,
+        spendUsedTodayCents: 0,
+        spendResetDate: today,
+      },
     });
   }
 
@@ -57,6 +62,8 @@ export async function POST(req: NextRequest) {
     maxAgents: user.maxAgents,
     tokensUsedToday: user.tokensUsedToday,
     tokenResetDate: user.tokenResetDate,
+    spendUsedTodayCents: user.spendUsedTodayCents,
+    spendResetDate: user.spendResetDate,
     // Masked previews only — never expose plaintext to the client
     glmApiKey: maskKey(user.glmApiKey ? decrypt(user.glmApiKey) : ""),
     openaiApiKey: maskKey(user.openaiApiKey ? decrypt(user.openaiApiKey) : ""),

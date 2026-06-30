@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { spendLimitForPlan } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -8,17 +9,22 @@ interface Totals {
   tokens: number;
   avgDurationMs: number;
   successRate: number;
+  costCents: number;
+  costUsd: number;
 }
 interface DailyPoint {
   date: string;
   tokens: number;
   runs: number;
+  costCents: number;
 }
 interface PerAgent {
   agentId: string;
   agentName: string;
   runs: number;
   tokens: number;
+  costCents: number;
+  costUsd: number;
   lastRunAt: string;
 }
 interface PerIntegration {
@@ -33,6 +39,8 @@ interface Plan {
   maxAgents: number;
   tokensUsedToday: number;
   agentCount: number;
+  spendUsedTodayCents: number;
+  spendLimitCents: number;
 }
 interface AnalyticsResponse {
   totals: Totals;
@@ -44,11 +52,11 @@ interface AnalyticsResponse {
 
 // GET /api/analytics?uid=<firebaseUid>
 // Returns aggregated usage stats for the user over the last 30 days:
-// - totals (runs/tokens/avg duration/success rate)
-// - daily series (tokens + runs per day, gaps filled with zero)
-// - perAgent breakdown (top 10 by runs)
+// - totals (runs/tokens/avg duration/success rate + cost)
+// - daily series (tokens + runs + cost per day, gaps filled with zero)
+// - perAgent breakdown (top 10 by runs, includes cost)
 // - perIntegration breakdown (grouped by platform)
-// - plan + current limits
+// - plan + current limits (including daily spend cap)
 export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsResponse | { error: string }>> {
   const uid = req.nextUrl.searchParams.get("uid");
   if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 });
@@ -61,6 +69,7 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
       dailyTokenLimit: true,
       maxAgents: true,
       tokensUsedToday: true,
+      spendUsedTodayCents: true,
     },
   });
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -72,12 +81,13 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
   // --- Totals (last 30 days of RunHistory) ---
   const runs = await db.runHistory.findMany({
     where: { userId: user.id, createdAt: { gte: since } },
-    select: { agentId: true, tokens: true, duration: true, status: true, createdAt: true },
+    select: { agentId: true, tokens: true, duration: true, status: true, createdAt: true, costCents: true },
   });
 
   const totalRuns = runs.length;
   const totalTokens = runs.reduce((sum, r) => sum + r.tokens, 0);
   const totalDuration = runs.reduce((sum, r) => sum + r.duration, 0);
+  const totalCostCents = runs.reduce((sum, r) => sum + (r.costCents ?? 0), 0);
   const avgDurationMs = totalRuns > 0 ? Math.round(totalDuration / totalRuns) : 0;
   const successCount = runs.filter((r) => r.status === "completed").length;
   const successRate = totalRuns > 0 ? successCount / totalRuns : 0;
@@ -93,15 +103,21 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const rec = dailyMap.get(d);
-    daily.push({ date: d, tokens: rec?.tokens ?? 0, runs: rec?.runs ?? 0 });
+    daily.push({
+      date: d,
+      tokens: rec?.tokens ?? 0,
+      runs: rec?.runs ?? 0,
+      costCents: rec?.costCents ?? 0,
+    });
   }
 
   // --- Per-agent breakdown (top 10 by runs) ---
-  const perAgentMap = new Map<string, { runs: number; tokens: number; lastRunAt: Date }>();
+  const perAgentMap = new Map<string, { runs: number; tokens: number; costCents: number; lastRunAt: Date }>();
   for (const r of runs) {
-    const cur = perAgentMap.get(r.agentId) ?? { runs: 0, tokens: 0, lastRunAt: new Date(0) };
+    const cur = perAgentMap.get(r.agentId) ?? { runs: 0, tokens: 0, costCents: 0, lastRunAt: new Date(0) };
     cur.runs += 1;
     cur.tokens += r.tokens;
+    cur.costCents += r.costCents ?? 0;
     if (r.createdAt > cur.lastRunAt) cur.lastRunAt = r.createdAt;
     perAgentMap.set(r.agentId, cur);
   }
@@ -118,6 +134,8 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
       agentName: agentNameMap.get(agentId) ?? "Deleted agent",
       runs: s.runs,
       tokens: s.tokens,
+      costCents: s.costCents,
+      costUsd: s.costCents / 100,
       lastRunAt: s.lastRunAt.toISOString(),
     }))
     .sort((a, b) => b.runs - a.runs)
@@ -163,6 +181,7 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
 
   // --- Plan & limits ---
   const agentCount = await db.agent.count({ where: { userId: user.id } });
+  const spendLimitCents = spendLimitForPlan(user.plan);
 
   return NextResponse.json({
     totals: {
@@ -170,6 +189,8 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
       tokens: totalTokens,
       avgDurationMs,
       successRate,
+      costCents: totalCostCents,
+      costUsd: totalCostCents / 100,
     },
     daily,
     perAgent,
@@ -180,6 +201,8 @@ export async function GET(req: NextRequest): Promise<NextResponse<AnalyticsRespo
       maxAgents: user.maxAgents,
       tokensUsedToday: user.tokensUsedToday,
       agentCount,
+      spendUsedTodayCents: user.spendUsedTodayCents,
+      spendLimitCents,
     },
   });
 }

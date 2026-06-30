@@ -21,6 +21,8 @@ export function estimateNodeTokens(
       return 350;
     case "trigger":
       return estimateTokens(data.content ?? "") + 20;
+    case "code":
+      return estimateTokens(data.code ?? "") + 50;
     default:
       return 0;
   }

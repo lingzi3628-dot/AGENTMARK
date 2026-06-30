@@ -15,6 +15,8 @@ const KIND_STYLES: Record<NodeKind, { ring: string; chip: string; label: string 
   vision: { ring: "border-cyan-500/40", chip: "bg-cyan-500/15 text-cyan-500", label: "Vision" },
   router: { ring: "border-orange-500/40", chip: "bg-orange-500/15 text-orange-500", label: "Router" },
   memory: { ring: "border-teal-500/40", chip: "bg-teal-500/15 text-teal-500", label: "Memory" },
+  "sub-agent": { ring: "border-violet-500/50", chip: "bg-violet-500/15 text-violet-400", label: "Sub-Agent" },
+  code: { ring: "border-amber-500/40", chip: "bg-amber-500/15 text-amber-500", label: "Code" },
   output: { ring: "border-rose-500/40", chip: "bg-rose-500/15 text-rose-500", label: "Output" },
 };
 
@@ -114,6 +116,29 @@ function AgentNodeBase({ data, selected }: NodeProps) {
             <NodeRow k="Mode" v={d.memoryMode ?? "load"} />
           </>
         )}
+        {d.kind === "sub-agent" && (
+          <>
+            <NodeRow k="Agent" v={d.subAgentId ? d.subAgentId.slice(0, 12) + "…" : "Not set"} />
+            <p className="line-clamp-2 text-[11px] text-muted-foreground">
+              {d.subAgentId
+                ? "Invokes the selected agent's full workflow."
+                : "Pick an agent to invoke from the inspector."}
+            </p>
+            {d.subAgentInputTemplate && d.subAgentInputTemplate !== "{{input}}" && (
+              <p className="truncate rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                {d.subAgentInputTemplate}
+              </p>
+            )}
+          </>
+        )}
+        {d.kind === "code" && (
+          <>
+            <NodeRow k="Timeout" v={`${d.codeTimeout ?? 5000}ms`} />
+            <pre className="line-clamp-3 rounded-md bg-muted/50 px-2 py-1 font-mono text-[10px] text-muted-foreground whitespace-pre-wrap">
+              {d.code || "// Write custom JS in the inspector"}
+            </pre>
+          </>
+        )}
         {d.kind === "tool" && d.tool === "http-request" && (
           <>
             <NodeRow k="Method" v={d.httpMethod ?? "GET"} />
@@ -160,7 +185,12 @@ function iconForKind(kind: NodeKind): string {
     case "knowledge": return "database";
     case "image-gen": return "image";
     case "vision": return "eye";
+    case "router": return "git-branch";
+    case "memory": return "brain";
+    case "sub-agent": return "network";
+    case "code": return "code";
     case "output": return "flag";
+    default: return "sparkles";
   }
 }
 function providerName(p?: string): string {

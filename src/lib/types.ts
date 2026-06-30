@@ -9,6 +9,8 @@ export type NodeKind =
   | "vision" // multimodal image understanding
   | "router" // conditional branching
   | "memory" // conversation memory store
+  | "sub-agent" // calls another agent as part of this workflow
+  | "code" // run custom JavaScript in a sandbox
   | "output"; // final result
 
 export type ModelProvider =
@@ -64,7 +66,36 @@ export interface WorkflowNodeData {
   customModelName?: string;
   customApiUrl?: string;
   customApiKey?: string;
+  // code node — raw JS function body executed in a vm sandbox
+  code?: string;
+  // code node — execution timeout in ms (default 5000, max 30000)
+  codeTimeout?: number;
+  // knowledge node — RAG (semantic search over uploaded Documents)
+  useRAG?: boolean;
+  ragTopK?: number; // 1-10, default 4
+  // sub-agent node — invokes another agent recursively
+  subAgentId?: string; // the ID of the agent to invoke
+  subAgentInputTemplate?: string; // template for input (default "{{input}}")
   status?: "idle" | "running" | "done" | "error";
+}
+
+/** RAG document — embedded chunks stored alongside an agent. */
+export interface AgentDocument {
+  id: string;
+  agentId: string;
+  title: string;
+  content: string; // original text (may be truncated)
+  source: string; // URL or filename
+  type: "text" | "url" | "markdown" | "pdf";
+  chunkCount: number;
+  createdAt: string;
+}
+
+/** Retrieved chunk returned by /api/agents/[id]/retrieve. */
+export interface RetrievedChunk {
+  docTitle: string;
+  chunk: string;
+  score: number;
 }
 
 // React Flow compatible node
@@ -179,10 +210,37 @@ export type StudioView =
   | "studio"
   | "run"
   | "templates"
+  | "marketplace"
   | "knowledge"
   | "publish"
   | "integrations"
+  | "schedules"
   | "customer"
   | "analytics"
   | "billing"
+  | "api-keys"
+  | "teams"
+  | "history"
   | "settings";
+
+export interface TemplateShare {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  tags: string[];
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  installs: number;
+  rating: number;
+  ratingCount: number;
+  priceCents: number;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
