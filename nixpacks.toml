@@ -1,6 +1,4 @@
 # Nixpacks configuration for Railway
-# Force bun as the package manager and explicit build/start commands
-
 [phases.setup]
 nixPkgs = ["nodejs_22", "bun"]
 
@@ -11,4 +9,4 @@ cmds = ["bun install"]
 cmds = ["bun run build"]
 
 [start]
-cmd = "bun run start"
+cmd = "npx next start"
