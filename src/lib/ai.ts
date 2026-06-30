@@ -1,10 +1,35 @@
 import ZAI from "z-ai-web-dev-sdk";
+import { promises as fs } from "fs";
+import path from "path";
 import type { WorkflowNode, WorkflowEdge, WorkflowNodeData } from "./types";
 
 // Singleton ZAI client
 let _zai: ZAI | null = null;
+
+// Ensure the z-ai config file exists. On Railway/production, the config is
+// provided via env vars (ZAI_BASE_URL, ZAI_API_KEY) — we write it to a file
+// that the SDK can read. On the sandbox, the file already exists at /etc/.
+async function ensureConfig() {
+  const configPath = path.join(process.cwd(), ".z-ai-config");
+  try {
+    await fs.access(configPath);
+    return; // already exists
+  } catch {
+    // doesn't exist — create from env vars if available
+  }
+  const baseUrl = process.env.ZAI_BASE_URL || process.env.NEXT_PUBLIC_ZAI_BASE_URL;
+  const apiKey = process.env.ZAI_API_KEY || process.env.NEXT_PUBLIC_ZAI_API_KEY;
+  if (baseUrl && apiKey) {
+    const config = JSON.stringify({ baseUrl, apiKey });
+    await fs.writeFile(configPath, config, "utf-8").catch(() => undefined);
+  }
+}
+
 export async function getZAI() {
-  if (!_zai) _zai = await ZAI.create();
+  if (!_zai) {
+    await ensureConfig();
+    _zai = await ZAI.create();
+  }
   return _zai;
 }
 
@@ -80,7 +105,13 @@ export async function* executeAgent(
   const started = Date.now();
   const order = topoSort(nodes, edges);
   const outputs = new Map<string, string>();
-  const zai = await getZAI();
+  let zai: ZAI | null = null;
+  try {
+    zai = await getZAI();
+  } catch {
+    // SDK config not available — we'll use direct HTTP fallback in runCompletion
+    zai = null;
+  }
 
   // upstream outputs for a node
   const upstream = (id: string) =>
@@ -114,6 +145,9 @@ export async function* executeAgent(
         outputs.set(node.id, text);
       } else if (data.kind === "tool" && data.tool === "web-search") {
         const query = incomingContext(node.id).slice(0, 200) || ctx.input;
+        if (!zai) {
+          outputs.set(node.id, `Web search unavailable (no SDK config). Query was: "${query}"`);
+        } else {
         try {
           const results = await zai.functions.invoke("web_search", { query, num: 5 });
           const formatted = results
@@ -124,11 +158,14 @@ export async function* executeAgent(
         } catch {
           outputs.set(node.id, `Web search was unavailable for: "${query}". Proceeding with reasoning only.`);
         }
+        }
       } else if (data.kind === "tool" && data.tool === "page-reader") {
         // Treat upstream text as a URL; extract clean page content.
         const url = (incomingContext(node.id).match(/https?:\/\/\S+/)?.[0] || "").trim();
         if (!url) {
           outputs.set(node.id, "Page Reader: no URL found in upstream input.");
+        } else if (!zai) {
+          outputs.set(node.id, `Page Reader unavailable (no SDK config). URL was: ${url}`);
         } else {
           try {
             const result = await zai.functions.invoke("page_reader", { url });
@@ -182,6 +219,9 @@ export async function* executeAgent(
         }
       } else if (data.kind === "tool" && data.tool === "tts") {
         const text = incomingContext(node.id).slice(0, 1000) || ctx.input;
+        if (!zai) {
+          outputs.set(node.id, "[TTS unavailable — no SDK config]");
+        } else {
         try {
           const res = await zai.audio.tts.create({
             input: text,
@@ -204,6 +244,7 @@ export async function* executeAgent(
           const msg = err instanceof Error ? err.message : "tts failed";
           outputs.set(node.id, `[TTS error: ${msg}]`);
         }
+        }
       } else if (data.kind === "tool") {
         const sys = TOOL_PROMPTS[data.tool ?? "summarize"] ?? TOOL_PROMPTS.summarize;
         const out = await runCompletion(zai, sys, incomingContext(node.id), data.provider, ctx.history);
@@ -213,6 +254,9 @@ export async function* executeAgent(
         // Generate an image from the upstream prompt.
         const prompt = incomingContext(node.id).slice(0, 1000) || ctx.input;
         yield { type: "trace", node: node.id, label, status: "streaming" };
+        if (!zai) {
+          outputs.set(node.id, "[Image generation unavailable — no SDK config]");
+        } else {
         try {
           const res = await zai.images.generations.create({
             prompt,
@@ -231,12 +275,15 @@ export async function* executeAgent(
           const msg = err instanceof Error ? err.message : "image gen failed";
           outputs.set(node.id, `[image error: ${msg}]`);
         }
+        }
       } else if (data.kind === "vision") {
         // Multimodal: analyse the node's attached image with the upstream prompt.
         const prompt = incomingContext(node.id) || "Describe this image.";
         const imageUrl = data.imageUrl;
         if (!imageUrl) {
           outputs.set(node.id, "[vision: no image attached]");
+        } else if (!zai) {
+          outputs.set(node.id, "[vision unavailable — no SDK config]");
         } else {
           if (node.id === terminalGenId) {
             yield { type: "trace", node: node.id, label, status: "streaming" };
@@ -326,7 +373,7 @@ export async function* executeAgent(
 }
 
 async function runCompletion(
-  zai: ZAI,
+  zai: ZAI | null,
   system: string,
   user: string,
   model: WorkflowNodeData["provider"],
@@ -337,16 +384,56 @@ async function runCompletion(
     ...history.slice(-6),
     { role: "user" as const, content: user || "(empty input)" },
   ];
-  const res = await zai.chat.completions.create({
-    model: model ?? "glm-4.5-air",
-    messages,
-    thinking: { type: "disabled" },
+  // Try the SDK first; fall back to direct HTTP if it fails or isn't available
+  if (zai) {
+    try {
+      const res = await zai.chat.completions.create({
+        model: model ?? "glm-4.5-air",
+        messages,
+        thinking: { type: "disabled" },
+      });
+      return res?.choices?.[0]?.message?.content ?? "";
+    } catch {
+      // fall through to direct
+    }
+  }
+  return directCompletion(system, user, model, history);
+}
+
+/** Direct HTTP completion — works without the SDK, using env vars or user API key. */
+async function directCompletion(
+  system: string,
+  user: string,
+  model: WorkflowNodeData["provider"] | undefined,
+  history: { role: "user" | "assistant"; content: string }[],
+): Promise<string> {
+  const baseUrl = process.env.ZAI_BASE_URL || "https://internal-api.z.ai/v1";
+  const apiKey = process.env.ZAI_API_KEY || "Z.ai";
+  const messages = [
+    { role: "system", content: system },
+    ...history.slice(-6),
+    { role: "user", content: user || "(empty input)" },
+  ];
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+      "X-Z-AI-From": "Z",
+    },
+    body: JSON.stringify({
+      model: model ?? "glm-4.5-air",
+      messages,
+      thinking: { type: "disabled" },
+    }),
   });
-  return res?.choices?.[0]?.message?.content ?? "";
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content ?? "";
 }
 
 async function* streamCompletion(
-  zai: ZAI,
+  zai: ZAI | null,
   system: string,
   user: string,
   model: WorkflowNodeData["provider"],
@@ -357,19 +444,80 @@ async function* streamCompletion(
     ...history.slice(-6),
     { role: "user" as const, content: user || "(empty input)" },
   ];
-  const body = await zai.chat.completions.create({
-    model: model ?? "glm-4.5-air",
-    messages,
-    stream: true,
-    thinking: { type: "disabled" },
-  });
+  // Try the SDK streaming first; fall back to direct HTTP streaming
+  if (zai) {
+    try {
+      const body = await zai.chat.completions.create({
+        model: model ?? "glm-4.5-air",
+        messages,
+        stream: true,
+        thinking: { type: "disabled" },
+      });
+      const stream = body as ReadableStream<Uint8Array>;
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === "[DONE]") return;
+          try {
+            const json = JSON.parse(payload);
+            const delta = json?.choices?.[0]?.delta?.content;
+            if (delta) yield delta as string;
+          } catch {
+            // partial JSON
+          }
+        }
+      }
+      return;
+    } catch {
+      // fall through to direct streaming
+    }
+  }
+  // Direct HTTP streaming fallback
+  yield* directStream(system, user, model, history);
+}
 
-  // body is a ReadableStream of SSE
-  const stream = body as ReadableStream<Uint8Array>;
-  const reader = stream.getReader();
+/** Direct streaming via fetch — works on Railway with env vars. */
+async function* directStream(
+  system: string,
+  user: string,
+  model: WorkflowNodeData["provider"] | undefined,
+  history: { role: "user" | "assistant"; content: string }[],
+): AsyncGenerator<string> {
+  const baseUrl = process.env.ZAI_BASE_URL || "https://internal-api.z.ai/v1";
+  const apiKey = process.env.ZAI_API_KEY || "Z.ai";
+  const messages = [
+    { role: "system", content: system },
+    ...history.slice(-6),
+    { role: "user", content: user || "(empty input)" },
+  ];
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+      "X-Z-AI-From": "Z",
+    },
+    body: JSON.stringify({
+      model: model ?? "glm-4.5-air",
+      messages,
+      stream: true,
+      thinking: { type: "disabled" },
+    }),
+  });
+  if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -386,7 +534,7 @@ async function* streamCompletion(
         const delta = json?.choices?.[0]?.delta?.content;
         if (delta) yield delta as string;
       } catch {
-        // partial JSON — ignore, will be completed next chunk
+        // partial
       }
     }
   }
