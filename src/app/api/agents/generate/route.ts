@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
 import { DEFAULT_TEMPLATES } from "@/lib/constants";
 import type { WorkflowNode, WorkflowEdge } from "@/lib/types";
 
@@ -51,36 +50,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Try the SDK first, then fall back to free API
+    // Use the free API directly (no SDK needed) — AGENTMARK Free
     let raw = "";
-    try {
-      const zai = await ZAI.create();
-      const completion = await zai.chat.completions.create({
-        model: "glm-4.6",
+    const res = await fetch("https://text.pollinations.ai/openai", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "openai",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Design an agent for: ${description}` },
         ],
-        thinking: { type: "disabled" },
-      });
-      raw = completion?.choices?.[0]?.message?.content ?? "";
-    } catch {
-      // Free API fallback (no key required) — AGENTMARK Free
-      const res = await fetch("https://text.pollinations.ai/openai", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "openai",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: `Design an agent for: ${description}` },
-          ],
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        raw = data?.choices?.[0]?.message?.content ?? "";
-      }
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      raw = data?.choices?.[0]?.message?.content ?? "";
     }
 
     // Extract JSON from the response (handle markdown code fences)

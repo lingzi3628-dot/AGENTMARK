@@ -27,20 +27,10 @@ async function ensureConfig() {
 }
 
 export async function getZAI(): Promise<ZAI | null> {
-  // If we already tried and failed, don't try again (cached null)
-  if (_triedInit && !_zai) return null;
-  if (_zai) return _zai;
-
-  _triedInit = true;
-  try {
-    await ensureConfig();
-    _zai = await ZAI.create();
-    return _zai;
-  } catch (e) {
-    console.log("[agentmark] SDK unavailable, using free API fallback:", e instanceof Error ? e.message : "unknown");
-    _zai = null;
-    return null;
-  }
+  // Always return null — we use the direct HTTP fallback (free API) exclusively.
+  // The SDK requires a config file that doesn't exist on Railway/production.
+  // If ZAI_BASE_URL + ZAI_API_KEY env vars are set, directCompletion will use GLM.
+  return null;
 }
 
 // In-process memory store (persists across runs within the server lifetime).
