@@ -126,7 +126,7 @@ export function InspectorPanel() {
           <>
             <div className="space-y-1.5">
               <Label className="text-xs">Model</Label>
-              <Select value={d.provider ?? "glm-4.5-air"} onValueChange={(v) => updateNodeData(node.id, { provider: v as typeof d.provider })}>
+              <Select value={d.provider ?? "free-openai"} onValueChange={(v) => updateNodeData(node.id, { provider: v as typeof d.provider })}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MODELS.map((m) => (
@@ -137,7 +137,49 @@ export function InspectorPanel() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="rounded-md bg-muted/50 p-2 text-[11px] text-muted-foreground">
+                {MODELS.find((m) => m.id === (d.provider ?? "free-openai"))?.description}
+              </p>
             </div>
+
+            {/* Custom model fields — only when "custom" is selected */}
+            {d.provider === "custom" && (
+              <div className="space-y-2.5 rounded-lg border border-border bg-muted/20 p-3">
+                <p className="text-[11px] font-medium text-primary">Custom Model Configuration</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">API Base URL</Label>
+                  <Input
+                    value={d.customApiUrl ?? ""}
+                    onChange={(e) => updateNodeData(node.id, { customApiUrl: e.target.value })}
+                    placeholder="https://api.openai.com/v1"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Model name</Label>
+                  <Input
+                    value={d.customModelName ?? ""}
+                    onChange={(e) => updateNodeData(node.id, { customModelName: e.target.value })}
+                    placeholder="gpt-4o-mini"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">API Key</Label>
+                  <Input
+                    type="password"
+                    value={d.customApiKey ?? ""}
+                    onChange={(e) => updateNodeData(node.id, { customApiKey: e.target.value })}
+                    placeholder="sk-..."
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Works with any OpenAI-compatible API (OpenAI, Groq, Together, Ollama, etc.)
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-xs">System prompt</Label>
               <Textarea

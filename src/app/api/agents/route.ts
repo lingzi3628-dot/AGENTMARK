@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 function defaultNodes(): WorkflowNode[] {
   return [
     { id: "trigger-1", type: "agent", position: { x: 80, y: 240 }, data: { label: "Input", kind: "trigger", content: "User message" } },
-    { id: "model-1", type: "agent", position: { x: 400, y: 240 }, data: { label: "GLM Model", kind: "model", provider: "glm-4.5-air", systemPrompt: "You are a helpful AI agent. Respond clearly and concisely." } },
+    { id: "model-1", type: "agent", position: { x: 400, y: 240 }, data: { label: "AI Model", kind: "model", provider: "free-openai", systemPrompt: "You are a helpful AI agent. Respond clearly and concisely." } },
     { id: "output-1", type: "agent", position: { x: 720, y: 240 }, data: { label: "Response", kind: "output" } },
   ];
 }

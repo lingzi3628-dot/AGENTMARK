@@ -11,7 +11,20 @@ export type NodeKind =
   | "memory" // conversation memory store
   | "output"; // final result
 
-export type ModelProvider = "glm-4.6" | "glm-4.5" | "glm-4.5-air" | "glm-4.5v";
+export type ModelProvider =
+  // AGENTMARK Free (default, no API key)
+  | "free-openai"
+  | "free-mistral"
+  | "free-llama"
+  | "free-qwen"
+  // GLM models (premium, needs ZAI_API_KEY)
+  | "glm-4.6"
+  | "glm-4.5"
+  | "glm-4.5-air"
+  | "glm-4.5v"
+  // Custom (user-provided API)
+  | "custom"
+  | string; // allow arbitrary model IDs for custom providers
 
 export type ToolType =
   | "web-search"
@@ -47,6 +60,10 @@ export interface WorkflowNodeData {
   memoryMode?: "save" | "load" | "both";
   // tts node
   ttsVoice?: string;
+  // custom model (when provider === "custom")
+  customModelName?: string;
+  customApiUrl?: string;
+  customApiKey?: string;
   status?: "idle" | "running" | "done" | "error";
 }
 

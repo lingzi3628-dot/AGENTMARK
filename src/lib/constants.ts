@@ -10,36 +10,80 @@ export interface ModelDef {
 }
 
 export const MODELS: ModelDef[] = [
+  // AGENTMARK Free — default, no API key required
+  {
+    id: "free-openai",
+    name: "AGENTMARK Free",
+    label: "Default • No API key",
+    description: "Free model included with every account. Works out of the box, no setup needed.",
+    contextWindow: "32K",
+    badge: "Free",
+  },
+  {
+    id: "free-mistral",
+    name: "Mistral (Free)",
+    label: "Fast reasoning",
+    description: "Free Mistral model — good for reasoning and code tasks.",
+    contextWindow: "32K",
+    badge: "Free",
+  },
+  {
+    id: "free-llama",
+    name: "Llama (Free)",
+    label: "Open source",
+    description: "Free Llama model — solid general-purpose performance.",
+    contextWindow: "32K",
+    badge: "Free",
+  },
+  {
+    id: "free-qwen",
+    name: "Qwen (Free)",
+    label: "Multilingual",
+    description: "Free Qwen model — strong on multilingual and reasoning tasks.",
+    contextWindow: "32K",
+    badge: "Free",
+  },
+  // GLM models — premium, requires ZAI_API_KEY env var
   {
     id: "glm-4.6",
     name: "GLM-4.6",
-    label: "Flagship reasoning",
-    description: "Most capable model for complex agentic reasoning and tool use.",
+    label: "Premium • Flagship",
+    description: "Most capable model for complex agentic reasoning. Requires API key.",
     contextWindow: "200K",
-    badge: "Flagship",
+    badge: "Premium",
   },
   {
     id: "glm-4.5",
     name: "GLM-4.5",
-    label: "Balanced",
-    description: "Strong general-purpose model with fast, reliable responses.",
+    label: "Premium • Balanced",
+    description: "Strong general-purpose model. Requires API key.",
     contextWindow: "128K",
+    badge: "Premium",
   },
   {
     id: "glm-4.5-air",
     name: "GLM-4.5 Air",
-    label: "Fast & light",
-    description: "Optimized for speed and cost — great for high-volume tasks.",
+    label: "Premium • Fast",
+    description: "Optimized for speed and cost. Requires API key.",
     contextWindow: "128K",
-    badge: "Fast",
+    badge: "Premium",
   },
   {
     id: "glm-4.5v",
     name: "GLM-4.5V",
-    label: "Vision",
-    description: "Multimodal model that understands images alongside text.",
+    label: "Premium • Vision",
+    description: "Multimodal model that understands images. Requires API key.",
     contextWindow: "64K",
-    badge: "Vision",
+    badge: "Premium",
+  },
+  // Custom — user provides their own API
+  {
+    id: "custom",
+    name: "Custom Model",
+    label: "Bring your own",
+    description: "Use any OpenAI-compatible API. Provide URL, model name, and API key.",
+    contextWindow: "—",
+    badge: "BYOK",
   },
 ];
 

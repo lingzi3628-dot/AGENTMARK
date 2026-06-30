@@ -85,7 +85,7 @@ function StudioInner() {
     const id = `${kind}-${Date.now()}-${seq.current}`;
     const defaults: Record<NodeKind, Partial<WorkflowNodeData>> = {
       trigger: { label: "Input", content: "User message" },
-      model: { label: "GLM Model", provider: "glm-4.5-air", systemPrompt: "You are a helpful AI agent. Respond clearly and concisely." },
+      model: { label: "AI Model", provider: "free-openai", systemPrompt: "You are a helpful AI agent. Respond clearly and concisely." },
       tool: { label: "Tool", tool: "web-search" },
       knowledge: { label: "Knowledge", content: "" },
       "image-gen": { label: "Image Gen", imageSize: "1024x1024" },

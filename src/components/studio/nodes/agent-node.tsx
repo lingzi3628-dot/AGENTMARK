@@ -165,12 +165,17 @@ function iconForKind(kind: NodeKind): string {
 }
 function providerName(p?: string): string {
   const map: Record<string, string> = {
+    "free-openai": "AGENTMARK Free",
+    "free-mistral": "Mistral (Free)",
+    "free-llama": "Llama (Free)",
+    "free-qwen": "Qwen (Free)",
     "glm-4.6": "GLM-4.6",
     "glm-4.5": "GLM-4.5",
     "glm-4.5-air": "GLM-4.5 Air",
     "glm-4.5v": "GLM-4.5V",
+    custom: "Custom Model",
   };
-  return p ? (map[p] ?? p) : "GLM-4.5 Air";
+  return p ? (map[p] ?? p) : "AGENTMARK Free";
 }
 function toolName(t?: string): string {
   const map: Record<string, string> = {

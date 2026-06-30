@@ -247,7 +247,7 @@ export async function* executeAgent(
         }
       } else if (data.kind === "tool") {
         const sys = TOOL_PROMPTS[data.tool ?? "summarize"] ?? TOOL_PROMPTS.summarize;
-        const out = await runCompletion(zai, sys, incomingContext(node.id), data.provider, ctx.history);
+        const out = await runCompletion(zai, sys, incomingContext(node.id), data.provider, ctx.history, data);
         outputs.set(node.id, out);
         totalTokens += Math.ceil(out.length / 4);
       } else if (data.kind === "image-gen") {
@@ -336,14 +336,14 @@ export async function* executeAgent(
           // Stream this one
           yield { type: "trace", node: node.id, label, status: "streaming" };
           let full = "";
-          for await (const chunk of streamCompletion(zai, sys, context, data.provider, ctx.history)) {
+          for await (const chunk of streamCompletion(zai, sys, context, data.provider, ctx.history, data)) {
             full += chunk;
             yield { type: "delta", content: chunk };
           }
           outputs.set(node.id, full);
           totalTokens += Math.ceil(full.length / 4);
         } else {
-          const out = await runCompletion(zai, sys, context, data.provider, ctx.history);
+          const out = await runCompletion(zai, sys, context, data.provider, ctx.history, data);
           outputs.set(node.id, out);
           totalTokens += Math.ceil(out.length / 4);
         }
@@ -378,6 +378,7 @@ async function runCompletion(
   user: string,
   model: WorkflowNodeData["provider"],
   history: { role: "user" | "assistant"; content: string }[],
+  nodeData?: WorkflowNodeData,
 ): Promise<string> {
   const messages = [
     { role: "system" as const, content: system },
@@ -397,25 +398,58 @@ async function runCompletion(
       // fall through to direct
     }
   }
-  return directCompletion(system, user, model, history);
+  return directCompletion(system, user, model, history, nodeData);
 }
 
 /**
- * AGENTMARK Free — default free AI backend (no API key required).
- * Uses the free text generation API. Branded as "AGENTMARK Free" to users.
- * Falls back to GLM API (via env vars) if configured.
+ * AGENTMARK model routing:
+ * - free-* models → free API (no key needed, default)
+ * - glm-* models → GLM API (needs ZAI_BASE_URL + ZAI_API_KEY env vars)
+ * - custom → user-provided customApiUrl + customApiKey + customModelName
  */
 
-// Free API endpoints (no key needed)
 const FREE_API_URL = "https://text.pollinations.ai/openai";
-const FREE_MODELS = ["openai", "mistral", "llama", "qwen"];
+const FREE_MODEL_MAP: Record<string, string> = {
+  "free-openai": "openai",
+  "free-mistral": "mistral",
+  "free-llama": "llama",
+  "free-qwen": "qwen",
+};
 
-/** Direct HTTP completion — tries GLM env vars first, then free API. */
+/** Resolve which API + model to use based on the provider ID. */
+function resolveModel(provider: WorkflowNodeData["provider"] | undefined) {
+  const p = provider ?? "free-openai";
+  if (p.startsWith("free-")) {
+    return {
+      type: "free" as const,
+      apiModel: FREE_MODEL_MAP[p] ?? "openai",
+      apiUrl: FREE_API_URL,
+      apiKey: "",
+    };
+  }
+  if (p.startsWith("glm-")) {
+    return {
+      type: "glm" as const,
+      apiModel: p,
+      apiUrl: process.env.ZAI_BASE_URL || "",
+      apiKey: process.env.ZAI_API_KEY || "",
+    };
+  }
+  return {
+    type: "free" as const,
+    apiModel: "openai",
+    apiUrl: FREE_API_URL,
+    apiKey: "",
+  };
+}
+
+/** Direct HTTP completion — routes to free, GLM, or custom API. */
 async function directCompletion(
   system: string,
   user: string,
   model: WorkflowNodeData["provider"] | undefined,
   history: { role: "user" | "assistant"; content: string }[],
+  nodeData?: WorkflowNodeData,
 ): Promise<string> {
   const messages = [
     { role: "system", content: system },
@@ -423,20 +457,37 @@ async function directCompletion(
     { role: "user", content: user || "(empty input)" },
   ];
 
-  // 1. Try GLM API if env vars are configured (paid/premium)
-  const glmUrl = process.env.ZAI_BASE_URL;
-  const glmKey = process.env.ZAI_API_KEY;
-  if (glmUrl && glmKey) {
+  // Custom model (user-provided API)
+  if (model === "custom" && nodeData?.customApiUrl) {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (nodeData.customApiKey) headers.authorization = `Bearer ${nodeData.customApiKey}`;
+    const res = await fetch(`${nodeData.customApiUrl}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: nodeData.customModelName || "gpt-4o-mini",
+        messages,
+      }),
+    });
+    if (!res.ok) throw new Error(`Custom API ${res.status}`);
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? "";
+  }
+
+  const route = resolveModel(model);
+
+  // GLM API (premium — needs env vars)
+  if (route.type === "glm" && route.apiUrl && route.apiKey) {
     try {
-      const res = await fetch(`${glmUrl}/chat/completions`, {
+      const res = await fetch(`${route.apiUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${glmKey}`,
+          authorization: `Bearer ${route.apiKey}`,
           "X-Z-AI-From": "Z",
         },
         body: JSON.stringify({
-          model: model ?? "glm-4.5-air",
+          model: route.apiModel,
           messages,
           thinking: { type: "disabled" },
         }),
@@ -451,12 +502,12 @@ async function directCompletion(
     }
   }
 
-  // 2. Free API (no key required) — default for all users
+  // Free API (no key required) — default for all users
   const res = await fetch(FREE_API_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      model: FREE_MODELS[0],
+      model: route.apiModel,
       messages,
     }),
   });
@@ -471,6 +522,7 @@ async function* streamCompletion(
   user: string,
   model: WorkflowNodeData["provider"],
   history: { role: "user" | "assistant"; content: string }[],
+  nodeData?: WorkflowNodeData,
 ): AsyncGenerator<string> {
   const messages = [
     { role: "system" as const, content: system },
@@ -516,15 +568,16 @@ async function* streamCompletion(
     }
   }
   // Direct HTTP streaming fallback
-  yield* directStream(system, user, model, history);
+  yield* directStream(system, user, model, history, nodeData);
 }
 
-/** Direct streaming via fetch — tries GLM env vars first, then free API. */
+/** Direct streaming via fetch — routes to free, GLM, or custom API. */
 async function* directStream(
   system: string,
   user: string,
   model: WorkflowNodeData["provider"] | undefined,
   history: { role: "user" | "assistant"; content: string }[],
+  nodeData?: WorkflowNodeData,
 ): AsyncGenerator<string> {
   const messages = [
     { role: "system", content: system },
@@ -532,73 +585,79 @@ async function* directStream(
     { role: "user", content: user || "(empty input)" },
   ];
 
-  // 1. Try GLM API if env vars are configured
-  const glmUrl = process.env.ZAI_BASE_URL;
-  const glmKey = process.env.ZAI_API_KEY;
-  if (glmUrl && glmKey) {
+  // Custom model (user-provided API)
+  if (model === "custom" && nodeData?.customApiUrl) {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (nodeData.customApiKey) headers.authorization = `Bearer ${nodeData.customApiKey}`;
     try {
-      const res = await fetch(`${glmUrl}/chat/completions`, {
+      const res = await fetch(`${nodeData.customApiUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: nodeData.customModelName || "gpt-4o-mini",
+          messages,
+          stream: true,
+        }),
+      });
+      if (res.ok && res.body) {
+        yield* readSSEStream(res.body);
+        return;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const route = resolveModel(model);
+
+  // GLM API (premium)
+  if (route.type === "glm" && route.apiUrl && route.apiKey) {
+    try {
+      const res = await fetch(`${route.apiUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${glmKey}`,
+          authorization: `Bearer ${route.apiKey}`,
           "X-Z-AI-From": "Z",
         },
         body: JSON.stringify({
-          model: model ?? "glm-4.5-air",
+          model: route.apiModel,
           messages,
           stream: true,
           thinking: { type: "disabled" },
         }),
       });
       if (res.ok && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data:")) continue;
-            const payload = trimmed.slice(5).trim();
-            if (payload === "[DONE]") return;
-            try {
-              const json = JSON.parse(payload);
-              const delta = json?.choices?.[0]?.delta?.content;
-              if (delta) yield delta as string;
-            } catch {
-              // partial
-            }
-          }
-        }
+        yield* readSSEStream(res.body);
         return;
       }
     } catch {
-      // fall through to free API
+      // fall through
     }
   }
 
-  // 2. Free API (no key required) — default for all users
+  // Free API (no key required) — default
   const res = await fetch(FREE_API_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      model: FREE_MODELS[0],
+      model: route.apiModel,
       messages,
       stream: true,
     }),
   });
   if (!res.ok || !res.body) {
-    // Non-streaming fallback for free API
-    const text = await directCompletion(system, user, model, history);
+    // Non-streaming fallback
+    const text = await directCompletion(system, user, model, history, nodeData);
     yield text;
     return;
   }
-  const reader = res.body.getReader();
+  yield* readSSEStream(res.body);
+}
+
+/** Read an SSE stream and yield content deltas. */
+async function* readSSEStream(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   while (true) {
