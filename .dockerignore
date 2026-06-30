@@ -1,0 +1,25 @@
+# Don't copy these into the Docker image — makes builds faster + smaller
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+.vercel
+download/
+db/*.db
+db/*.db-journal
+*.log
+dev.log
+telegram-poll.log
+supervisor.log
+keep-alive.log
+server.log
+tests/
+playwright-report/
+test-results/
+agent-ctx/
+skills/
+claude/
+.z-ai-config
