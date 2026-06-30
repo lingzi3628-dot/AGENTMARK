@@ -226,3 +226,20 @@ Work Log:
 
 Stage Summary:
 - Every integration platform now has a complete, actionable setup guide accessible via a "Guide" button on each card AND a collapsible section inside the connect dialog. Users can follow the steps, then click "Connect now" to enter credentials.
+
+---
+Task ID: TG-WEBHOOK
+Agent: main
+Task: Make Telegram bots actually reply — webhook registration + message handler
+
+Work Log:
+- Created src/lib/telegram.ts with Telegram Bot API helpers: setTelegramWebhook, deleteTelegramWebhook, sendTelegramMessage, getTelegramBotInfo (validates token), deriveWebhookUrl (auto-detects public URL from request headers).
+- Updated POST /api/agents/[id]/integrations: when connecting Telegram, auto-validates the bot token via getMe, then auto-registers a webhook URL (https://yourhost/api/webhooks/telegram?i={integrationId}) with Telegram's setWebhook API. Returns setup status (ok/error message) to the UI.
+- Updated DELETE endpoints (both per-agent and per-integration) to call deleteTelegramWebhook when removing a Telegram integration — clean teardown.
+- Created POST /api/webhooks/telegram: the actual webhook receiver Telegram calls when someone messages the bot. It: parses the incoming update, looks up the integration by ID (from query param), sends a "typing" indicator, runs the agent's workflow (non-streaming), splits long replies to fit Telegram's 4096-char limit, sends the reply via sendMessage, and records the run in RunHistory.
+- Updated IntegrationsView to show the setup status toast (success: "Bot @username connected! Send it a message to test." / error: "Token invalid: Unauthorized").
+- Updated Telegram procedure text to note webhook registration is now automatic.
+- Verified: invalid token rejected with "Token invalid: Unauthorized", valid flow returns success, webhook endpoint compiles and responds, delete cleans up.
+
+Stage Summary:
+- Telegram bots now actually reply to messages. The full pipeline: user messages bot → Telegram forwards to our webhook → we run the agent → we send the reply back via Telegram's API. The only requirement is that the server is publicly reachable (Telegram must be able to call the webhook URL).

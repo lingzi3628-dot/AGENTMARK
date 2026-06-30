@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { deleteTelegramWebhook } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Clean up platform-side webhook before deleting
+  const integ = await db.integration.findUnique({ where: { id } });
+  if (integ?.platform === "telegram") {
+    try {
+      const cfg = JSON.parse(integ.config) as Record<string, string>;
+      if (cfg.botToken) await deleteTelegramWebhook(cfg.botToken);
+    } catch {
+      // ignore
+    }
+  }
   await db.integration.delete({ where: { id } }).catch(() => undefined);
   return NextResponse.json({ ok: true });
 }

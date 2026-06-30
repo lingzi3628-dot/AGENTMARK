@@ -143,7 +143,17 @@ export function IntegrationsView() {
           body: JSON.stringify({ platform: dialogPlatformDef.id, config: configValues }),
         });
         if (!res.ok) throw new Error("Failed to connect");
-        toast.success(`Connected to ${dialogPlatformDef.name}`);
+        const data = await res.json();
+        // Show setup status if the platform did auto-setup (e.g. Telegram webhook)
+        if (data.setup) {
+          if (data.setup.ok) {
+            toast.success(data.setup.message || `Connected to ${dialogPlatformDef.name}`);
+          } else {
+            toast.error(data.setup.message || `Connected, but setup had an issue`);
+          }
+        } else {
+          toast.success(`Connected to ${dialogPlatformDef.name}`);
+        }
       }
       await fetchIntegrations(activeAgent.id);
       closeDialog();
