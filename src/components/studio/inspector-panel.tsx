@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, X, Settings2, Cpu, Upload, Link2, Plus, Play, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import { Trash2, X, Settings2, Cpu, Upload, Link2, Plus, Play, Loader2, AlertTriangle, Sparkles, ShieldCheck, Clock, Mail } from "lucide-react";
 import { MODELS, TOOLS, IMAGE_SIZES } from "@/lib/constants";
 import { estimateNodeTokens, formatTokens } from "@/lib/tokens";
 import type { NodeKind, KnowledgeItem, Agent } from "@/lib/types";
@@ -30,6 +30,7 @@ const KIND_LABEL: Record<NodeKind, string> = {
   memory: "Memory Node",
   "sub-agent": "Sub-Agent Node",
   code: "Code Node",
+  approval: "Approval Node",
   output: "Output Node",
 };
 
@@ -322,6 +323,65 @@ export function InspectorPanel() {
           />
         )}
 
+        {d.kind === "approval" && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-500">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Pauses the workflow until a human approves or rejects it. Pending approvals show up in the Approvals tab.
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Approval message</Label>
+              <Textarea
+                value={d.approvalMessage ?? ""}
+                onChange={(e) => updateNodeData(node.id, { approvalMessage: e.target.value })}
+                placeholder="Describe what the reviewer should check before approving."
+                rows={4}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Shown to whoever reviews this step in the Approvals tab.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs flex items-center gap-1.5">
+                <Clock className="h-3 w-3" /> Auto-expire (hours)
+              </Label>
+              <Input
+                type="number"
+                min={1}
+                max={720}
+                value={d.approvalTimeoutHours ?? 168}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n) && n > 0) {
+                    updateNodeData(node.id, { approvalTimeoutHours: Math.min(720, Math.floor(n)) });
+                  }
+                }}
+                className="h-8 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                If nobody decides within this window, the workflow auto-rejects. Default: 168h (7 days).
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 p-3">
+              <div className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                <Label htmlFor="approval-email" className="text-xs font-medium">
+                  Email me on new approvals
+                </Label>
+              </div>
+              <Switch
+                id="approval-email"
+                checked={d.approvalNotifyEmail !== false}
+                onCheckedChange={(v) => updateNodeData(node.id, { approvalNotifyEmail: v })}
+              />
+            </div>
+          </div>
+        )}
+
         {d.kind === "sub-agent" && (
           <SubAgentEditor
             value={d.subAgentId ?? ""}
@@ -568,6 +628,7 @@ function iconFor(kind: NodeKind): string {
     case "memory": return "brain";
     case "sub-agent": return "network";
     case "code": return "code";
+    case "approval": return "shield-check";
     case "output": return "flag";
     default: return "sparkles";
   }

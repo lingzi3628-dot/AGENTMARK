@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateWebhookToken, deriveWebhookUrl } from "@/lib/webhook";
+import { getPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
-
-const MAX_TRIGGERS_PER_AGENT = 5;
 
 // List webhook triggers for an agent
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -37,15 +36,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const agent = await db.agent.findUnique({ where: { id }, select: { id: true } });
+  const agent = await db.agent.findUnique({ where: { id }, select: { id: true, userId: true } });
   if (!agent) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
+  // Rate limit: check webhook trigger count against the user's plan
+  const user = agent.userId
+    ? await db.user.findUnique({ where: { id: agent.userId }, select: { plan: true } })
+    : null;
+  const plan = getPlan(user?.plan || "free");
   const existing = await db.webhookTrigger.count({ where: { agentId: id } });
-  if (existing >= MAX_TRIGGERS_PER_AGENT) {
+  if (existing >= plan.maxWebhookTriggersPerAgent) {
     return NextResponse.json(
-      { error: `Webhook trigger limit reached (${MAX_TRIGGERS_PER_AGENT} per agent).` },
+      {
+        error: `Webhook trigger limit reached (${plan.maxWebhookTriggersPerAgent} per agent on the ${plan.name} plan).`,
+        limit: plan.maxWebhookTriggersPerAgent,
+        current: existing,
+        plan: plan.id,
+        upgradeUrl: "/billing",
+      },
       { status: 429 },
     );
   }

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { computeNextRun, isValidCron, humanizeCron } from "@/lib/scheduler";
+import { getPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
-
-const MAX_SCHEDULES_PER_AGENT = 10;
 
 // List schedules for an agent
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -36,16 +35,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   // Verify the agent exists
-  const agent = await db.agent.findUnique({ where: { id }, select: { id: true } });
+  const agent = await db.agent.findUnique({ where: { id }, select: { id: true, userId: true } });
   if (!agent) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
-  // Cap schedules per agent
+  // Rate limit: check schedule count against the user's plan
+  const user = agent.userId
+    ? await db.user.findUnique({ where: { id: agent.userId }, select: { plan: true } })
+    : null;
+  const plan = getPlan(user?.plan || "free");
   const existing = await db.schedule.count({ where: { agentId: id } });
-  if (existing >= MAX_SCHEDULES_PER_AGENT) {
+  if (existing >= plan.maxSchedulesPerAgent) {
     return NextResponse.json(
-      { error: `Schedule limit reached (${MAX_SCHEDULES_PER_AGENT} per agent).` },
+      {
+        error: `Schedule limit reached (${plan.maxSchedulesPerAgent} per agent on the ${plan.name} plan).`,
+        limit: plan.maxSchedulesPerAgent,
+        current: existing,
+        plan: plan.id,
+        upgradeUrl: "/billing",
+      },
       { status: 429 },
     );
   }

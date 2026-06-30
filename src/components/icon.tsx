@@ -5,6 +5,7 @@ import {
   Database, Rocket, Lightbulb, Wand2, Play, Wrench, Flag, Globe,
   Tags, Image, Eye, Link, Webhook, Volume2, GitBranch, Send, Hash,
   MessageSquare, Mail, Smartphone, MessageCircle, Network, Phone,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ const MAP: Record<string, LucideIcon> = {
   "message-circle": MessageCircle,
   network: Network,
   phone: Phone,
+  "shield-check": ShieldCheck,
 };
 
 export function Icon({

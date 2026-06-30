@@ -533,6 +533,95 @@ export async function* executeAgent(
             }
           }
         }
+      } else if (data.kind === "approval") {
+        // Human-in-the-loop: pause the workflow until someone approves or
+        // rejects (or it auto-expires). The upstream context becomes the
+        // payload the approver sees. We persist an Approval row, emit a
+        // WAITING trace, then poll the DB every 5s for up to 10 minutes.
+        const incoming = incomingContext(node.id);
+        const timeoutHours = Math.max(1, Math.min(720, data.approvalTimeoutHours ?? 168));
+        const expiresAt = new Date(Date.now() + timeoutHours * 3600 * 1000);
+        const runId =
+          (ctx.agentId ?? "agent") + "-" + Date.now().toString(36) + "-" +
+          Math.random().toString(36).slice(2, 8);
+
+        const approval = await db.approval.create({
+          data: {
+            agentId: ctx.agentId ?? "",
+            runId,
+            nodeId: node.id,
+            context: incoming.slice(0, 12000),
+            status: "pending",
+            expiresAt,
+          },
+        });
+
+        // Surface the approval request to any client listening to the SSE
+        // stream (the run view shows it as a "waiting for approval" step).
+        yield {
+          type: "trace",
+          node: node.id,
+          label: `${label}: waiting for approval`,
+          status: "WAITING",
+          message: data.approvalMessage || "Approval required",
+        };
+
+        // Poll every 5 seconds for up to 10 minutes (120 polls). On each
+        // tick we re-read the row to check if status has changed or the
+        // expiry has passed. A terminal decision breaks the loop.
+        const POLL_INTERVAL_MS = 5000;
+        const MAX_POLLS = 120;
+        let decision: "approved" | "rejected" | "expired" | "pending" = "pending";
+        for (let i = 0; i < MAX_POLLS; i++) {
+          await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+          const row = await db.approval
+            .findUnique({ where: { id: approval.id } })
+            .catch(() => null);
+          if (!row) {
+            decision = "expired";
+            break;
+          }
+          if (row.status === "approved" || row.status === "rejected") {
+            decision = row.status;
+            break;
+          }
+          // Auto-expire if the window has elapsed — mark the row so the
+          // Approvals UI shows it as expired rather than pending.
+          if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
+            await db.approval
+              .update({ where: { id: row.id }, data: { status: "expired" } })
+              .catch(() => undefined);
+            decision = "expired";
+            break;
+          }
+        }
+
+        if (decision === "approved") {
+          outputs.set(node.id, incoming);
+          yield {
+            type: "trace",
+            node: node.id,
+            label: `${label}: approved`,
+            status: "streaming",
+          };
+        } else {
+          // Rejected or expired — stop the workflow with an error event so
+          // the run view + history surface the failure clearly.
+          const reason = decision === "expired" ? "expired (no decision)" : "rejected";
+          outputs.set(node.id, `[approval ${reason}]`);
+          yield {
+            type: "trace",
+            node: node.id,
+            label: `${label}: ${reason}`,
+            status: "error",
+          };
+          yield {
+            type: "error",
+            node: node.id,
+            message: `Approval node "${label}" ${reason}. Workflow stopped.`,
+          };
+          return;
+        }
       } else if (data.kind === "model") {
         const sys = data.systemPrompt || "You are a helpful AI agent.";
         const context = incomingContext(node.id);

@@ -123,6 +123,19 @@ export const NODE_PALETTE = [
     color: "violet",
     defaultData: { label: "Sub-Agent", subAgentId: "", subAgentInputTemplate: "{{input}}" },
   },
+  {
+    kind: "approval",
+    label: "Approval",
+    icon: "shield-check",
+    desc: "Pause for human review",
+    color: "amber",
+    defaultData: {
+      label: "Approval Required",
+      approvalMessage: "Please review and approve this step.",
+      approvalTimeoutHours: 168,
+      approvalNotifyEmail: true,
+    },
+  },
   { kind: "output", label: "Output", icon: "flag", desc: "Returns the final result" },
 ] as const;
 

@@ -22,6 +22,8 @@ import { ApiKeysView } from "@/components/studio/views/api-keys-view";
 import { TeamsView } from "@/components/studio/views/teams-view";
 import { HistoryView } from "@/components/studio/views/history-view";
 import { MarketplaceView } from "@/components/studio/views/marketplace-view";
+import { ApprovalsView } from "@/components/studio/views/approvals-view";
+import { OptimizeView } from "@/components/studio/views/optimize-view";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
@@ -99,6 +101,8 @@ export default function Home() {
               {view === "teams" && <TeamsView />}
               {view === "history" && <HistoryView />}
               {view === "marketplace" && <MarketplaceView />}
+              {view === "approvals" && <ApprovalsView />}
+              {view === "optimize" && <OptimizeView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

@@ -440,3 +440,27 @@ model Document {
 
   @@index([agentId])
 }
+
+// Human-in-the-loop approval — pauses a workflow at an "approval" node until
+// the user approves or rejects (or it auto-expires after N hours).
+model Approval {
+  id          String   @id @default(cuid())
+  agentId     String
+  runId       String   @default("")
+  nodeId      String
+  // The input/output context that needs approval
+  context     String   @default("")
+  // pending | approved | rejected | expired
+  status      String   @default("pending")
+  // Who approved/rejected (user id)
+  decidedById String?
+  decidedAt   DateTime?
+  // Optional comment from the approver
+  comment     String   @default("")
+  // Auto-expire after 7 days if no decision
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([agentId, status])
+  @@index([runId])
+}

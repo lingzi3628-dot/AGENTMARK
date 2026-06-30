@@ -17,6 +17,7 @@ const KIND_STYLES: Record<NodeKind, { ring: string; chip: string; label: string 
   memory: { ring: "border-teal-500/40", chip: "bg-teal-500/15 text-teal-500", label: "Memory" },
   "sub-agent": { ring: "border-violet-500/50", chip: "bg-violet-500/15 text-violet-400", label: "Sub-Agent" },
   code: { ring: "border-amber-500/40", chip: "bg-amber-500/15 text-amber-500", label: "Code" },
+  approval: { ring: "border-amber-500/50", chip: "bg-amber-500/20 text-amber-400", label: "Approval" },
   output: { ring: "border-rose-500/40", chip: "bg-rose-500/15 text-rose-500", label: "Output" },
 };
 
@@ -139,6 +140,14 @@ function AgentNodeBase({ data, selected }: NodeProps) {
             </pre>
           </>
         )}
+        {d.kind === "approval" && (
+          <>
+            <NodeRow k="Timeout" v={`${d.approvalTimeoutHours ?? 168}h`} />
+            <p className="line-clamp-2 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-500">
+              {d.approvalMessage || "Pauses the workflow for human review."}
+            </p>
+          </>
+        )}
         {d.kind === "tool" && d.tool === "http-request" && (
           <>
             <NodeRow k="Method" v={d.httpMethod ?? "GET"} />
@@ -189,6 +198,7 @@ function iconForKind(kind: NodeKind): string {
     case "memory": return "brain";
     case "sub-agent": return "network";
     case "code": return "code";
+    case "approval": return "shield-check";
     case "output": return "flag";
     default: return "sparkles";
   }

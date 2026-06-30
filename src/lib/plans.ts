@@ -8,7 +8,10 @@ export interface PlanDef {
   price: string; // "$0/mo", "$19/mo", "$79/mo"
   priceUsd: number; // 0, 19, 79 — used for Paystack checkout amount
   maxAgents: number; // 2, 25, 100
+  maxIntegrationsPerAgent: number; // 2, 25, 100
   dailyTokenLimit: number; // 100000, 500000, 2000000
+  maxWebhookTriggersPerAgent: number; // 2, 25, 100
+  maxSchedulesPerAgent: number; // 2, 25, 100
   features: string[];
   highlighted?: boolean;
 }
@@ -20,12 +23,15 @@ export const PLANS: PlanDef[] = [
     price: "$0/mo",
     priceUsd: 0,
     maxAgents: 2,
+    maxIntegrationsPerAgent: 2,
+    maxWebhookTriggersPerAgent: 2,
+    maxSchedulesPerAgent: 2,
     dailyTokenLimit: 100000,
     features: [
       "2 agents",
+      "2 integrations per agent",
       "100K tokens/day",
       "All node types",
-      "1 integration platform",
       "Community support",
     ],
   },
@@ -35,12 +41,15 @@ export const PLANS: PlanDef[] = [
     price: "$19/mo",
     priceUsd: 19,
     maxAgents: 25,
+    maxIntegrationsPerAgent: 25,
+    maxWebhookTriggersPerAgent: 25,
+    maxSchedulesPerAgent: 25,
     dailyTokenLimit: 500000,
     features: [
       "25 agents",
+      "Unlimited integrations",
       "500K tokens/day",
       "All node types",
-      "All 9 integrations",
       "Priority support",
       "Custom API keys",
     ],
@@ -52,12 +61,15 @@ export const PLANS: PlanDef[] = [
     price: "$79/mo",
     priceUsd: 79,
     maxAgents: 100,
+    maxIntegrationsPerAgent: 100,
+    maxWebhookTriggersPerAgent: 100,
+    maxSchedulesPerAgent: 100,
     dailyTokenLimit: 2000000,
     features: [
       "100 agents",
+      "Unlimited integrations",
       "2M tokens/day",
       "All features",
-      "All integrations",
       "SSO + audit log",
       "Dedicated support",
     ],

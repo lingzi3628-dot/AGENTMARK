@@ -11,6 +11,7 @@ export type NodeKind =
   | "memory" // conversation memory store
   | "sub-agent" // calls another agent as part of this workflow
   | "code" // run custom JavaScript in a sandbox
+  | "approval" // human-in-the-loop pause + review
   | "output"; // final result
 
 export type ModelProvider =
@@ -76,6 +77,10 @@ export interface WorkflowNodeData {
   // sub-agent node — invokes another agent recursively
   subAgentId?: string; // the ID of the agent to invoke
   subAgentInputTemplate?: string; // template for input (default "{{input}}")
+  // approval node — pauses the workflow for human review
+  approvalMessage?: string; // message shown to the approver
+  approvalTimeoutHours?: number; // auto-reject after N hours (default 168 = 7 days)
+  approvalNotifyEmail?: boolean; // send email notification (default true)
   status?: "idle" | "running" | "done" | "error";
 }
 
@@ -215,6 +220,8 @@ export type StudioView =
   | "publish"
   | "integrations"
   | "schedules"
+  | "approvals"
+  | "optimize"
   | "customer"
   | "analytics"
   | "billing"
@@ -243,4 +250,40 @@ export interface TemplateShare {
   published: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Human-in-the-loop approval row (mirrors the Approval Prisma model). */
+export interface Approval {
+  id: string;
+  agentId: string;
+  runId: string;
+  nodeId: string;
+  context: string;
+  status: "pending" | "approved" | "rejected" | "expired";
+  decidedById: string | null;
+  decidedAt: string | null;
+  comment: string;
+  expiresAt: string | null;
+  createdAt: string;
+  // Joined fields surfaced by the API for display:
+  agentName?: string;
+  nodeLabel?: string;
+  approvalMessage?: string;
+}
+
+/** One AI-generated suggestion from the workflow optimizer. */
+export interface OptimizeSuggestion {
+  type: "cost" | "latency" | "reliability" | "best-practice";
+  severity: "low" | "medium" | "high";
+  title: string;
+  description: string;
+  nodeId?: string;
+  estimatedSavings?: string;
+}
+
+/** Full response from POST /api/agents/[id]/optimize. */
+export interface OptimizeResponse {
+  suggestions: OptimizeSuggestion[];
+  overallScore: number;
+  summary: string;
 }

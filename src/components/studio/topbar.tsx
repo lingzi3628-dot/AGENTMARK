@@ -26,6 +26,8 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   publish: { title: "Publish", sub: "Embed your agent on any website" },
   integrations: { title: "Integrations", sub: "Connect agents to your platforms" },
   schedules: { title: "Schedules", sub: "Auto-run agents on a cron schedule" },
+  approvals: { title: "Approvals", sub: "Review pending workflow steps" },
+  optimize: { title: "Optimize", sub: "AI-powered workflow analysis" },
   history: { title: "History", sub: "Version history & branches" },
   customer: { title: "Customer Mode", sub: "AI-generated talking points & message drafts" },
   analytics: { title: "Analytics", sub: "Usage, tokens, and trends" },

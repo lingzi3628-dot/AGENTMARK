@@ -5,6 +5,7 @@ import { getWhatsAppPhoneNumberInfo, deriveWebhookUrl as deriveWhatsAppWebhookUr
 import { testSlackAuth } from "@/lib/slack";
 import { EmailClient } from "@/lib/email";
 import { VoiceClient } from "@/lib/voice";
+import { getPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const platform = body.platform as string;
   const config = body.config ?? {};
   if (!platform) return NextResponse.json({ error: "platform required" }, { status: 400 });
+
+  // === RATE LIMIT: check integration count against the user's plan ===
+  // Look up the agent + its owner to determine the plan limit
+  const agent = await db.agent.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+  if (agent?.userId) {
+    const user = await db.user.findUnique({
+      where: { id: agent.userId },
+      select: { plan: true },
+    });
+    const plan = getPlan(user?.plan || "free");
+    const existingCount = await db.integration.count({ where: { agentId: id } });
+    if (existingCount >= plan.maxIntegrationsPerAgent) {
+      return NextResponse.json(
+        {
+          error: `Integration limit reached (${plan.maxIntegrationsPerAgent} per agent on the ${plan.name} plan).`,
+          limit: plan.maxIntegrationsPerAgent,
+          current: existingCount,
+          plan: plan.id,
+          upgradeUrl: "/billing",
+        },
+        { status: 429 },
+      );
+    }
+  }
 
   const created = await db.integration.create({
     data: { agentId: id, platform, config: JSON.stringify(config), enabled: true },
