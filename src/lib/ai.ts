@@ -108,8 +108,9 @@ export async function* executeAgent(
   let zai: ZAI | null = null;
   try {
     zai = await getZAI();
-  } catch {
+  } catch (e) {
     // SDK config not available — we'll use direct HTTP fallback in runCompletion
+    console.log("[agentmark] SDK unavailable, using free API fallback:", e instanceof Error ? e.message : "unknown");
     zai = null;
   }
 
