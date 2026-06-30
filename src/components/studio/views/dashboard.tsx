@@ -71,13 +71,31 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
     });
 
   async function createBlank() {
+    // Client-side limit check (server enforces too via /api/agents POST)
+    if (user && agents.length >= user.maxAgents) {
+      toast.error(`Agent limit reached (${user.maxAgents}). Delete an existing agent or upgrade your plan.`, {
+        description: `Free plans are limited to ${user.maxAgents} agents.`,
+        action: { label: "Upgrade", onClick: () => setView("billing") },
+      });
+      return;
+    }
     try {
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: "Untitled Agent", description: "", firebaseUid: user?.firebaseUid }),
       });
-      if (!res.ok) throw new Error("create failed");
+      if (!res.ok) {
+        if (res.status === 429) {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || "Agent limit reached", {
+            description: "Upgrade your plan for more agents.",
+            action: { label: "Upgrade", onClick: () => setView("billing") },
+          });
+          return;
+        }
+        throw new Error("create failed");
+      }
       const agent = (await res.json()) as Agent;
       upsertAgent(agent);
       setActiveAgent(agent);
@@ -89,6 +107,12 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
   }
 
   async function duplicate(a: Agent) {
+    if (user && agents.length >= user.maxAgents) {
+      toast.error(`Agent limit reached (${user.maxAgents}). Delete an agent first or upgrade.`, {
+        action: { label: "Upgrade", onClick: () => setView("billing") },
+      });
+      return;
+    }
     try {
       const res = await fetch("/api/agents", {
         method: "POST",
@@ -103,7 +127,15 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
           firebaseUid: user?.firebaseUid,
         }),
       });
-      if (!res.ok) throw new Error("duplicate failed");
+      if (!res.ok) {
+        if (res.status === 429) {
+          toast.error("Agent limit reached — cannot duplicate", {
+            action: { label: "Upgrade", onClick: () => setView("billing") },
+          });
+          return;
+        }
+        throw new Error("duplicate failed");
+      }
       const created = (await res.json()) as Agent;
       upsertAgent(created);
       toast.success("Agent duplicated");
@@ -140,6 +172,13 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
   }
 
   async function importAgent(file: File) {
+    if (user && agents.length >= user.maxAgents) {
+      toast.error(`Agent limit reached (${user.maxAgents}). Delete an agent first or upgrade.`, {
+        action: { label: "Upgrade", onClick: () => setView("billing") },
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     try {
       const text = await file.text();
       const data = JSON.parse(text) as Partial<{
@@ -171,7 +210,15 @@ export function DashboardView({ onOpenStudio }: { onOpenStudio: () => void }) {
           firebaseUid: user?.firebaseUid,
         }),
       });
-      if (!res.ok) throw new Error("import failed");
+      if (!res.ok) {
+        if (res.status === 429) {
+          toast.error("Agent limit reached — cannot import", {
+            action: { label: "Upgrade", onClick: () => setView("billing") },
+          });
+          return;
+        }
+        throw new Error("import failed");
+      }
       const created = (await res.json()) as Agent;
       upsertAgent(created);
       toast.success("Agent imported");

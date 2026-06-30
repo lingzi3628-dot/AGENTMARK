@@ -15,8 +15,8 @@ model User {
   email           String   @unique
   name            String   @default("")
   photoURL        String   @default("")
-  plan            String   @default("free") // free | pro | enterprise
-  // BYOK: bring your own API keys (encrypted at rest in a real app)
+  plan            String   @default("free") // free | pro | team
+  // BYOK: built-in provider keys (encrypted at rest via src/lib/crypto.ts)
   glmApiKey       String   @default("")
   openaiApiKey    String   @default("")
   anthropicApiKey String   @default("")
@@ -24,9 +24,9 @@ model User {
   supabaseUrl     String   @default("")
   supabaseAnonKey String   @default("")
   supabaseServiceKey String @default("")
-  // limits
+  // limits — FREE plan = 2 agents max
   dailyTokenLimit Int      @default(100000)
-  maxAgents       Int      @default(10)
+  maxAgents       Int      @default(2)
   // token accounting (reset daily)
   tokensUsedToday Int      @default(0)
   tokenResetDate  String   @default("") // YYYY-MM-DD
@@ -35,6 +35,12 @@ model User {
   agents          Agent[]
   runs            RunHistory[]
   usageRecords    UsageRecord[]
+  customApis      CustomApi[]
+  conversations   CustomerConversation[]
+  // Stripe billing (optional — empty on free tier)
+  stripeCustomerId   String   @default("")
+  stripeSubscriptionId String @default("")
+  stripePriceId      String   @default("")
 }
 
 model Agent {
@@ -140,5 +146,54 @@ model MessageLog {
   status        String   @default("delivered") // delivered | failed | pending
   tokens        Int      @default(0)
   durationMs    Int      @default(0)
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+// User-supplied API keys for ANY provider (GLM, OpenAI, Anthropic, Mistral, Cohere, Together, Groq, custom OpenAI-compatible, etc.)
+// Stored encrypted at rest with AES-256-GCM (see src/lib/crypto.ts).
+model CustomApi {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String   // friendly name e.g. "My GLM key"
+  provider    String   // glm | openai | anthropic | mistral | cohere | together | groq | openrouter | custom
+  baseUrl     String   @default("") // optional override (e.g. https://api.openai.com/v1)
+  modelName   String   @default("") // e.g. gpt-4o, claude-3-5-sonnet, glm-4.6
+  encryptedKey String  // AES-256-GCM ciphertext (iv + authTag + ciphertext, base64)
+  // masked preview for display — first 4 + last 4 chars of the plaintext key
+  maskedKey   String   @default("")
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Customer-mode conversations: AI helps user generate talking points & message drafts for their business.
+model CustomerConversation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String   @default("Untitled Conversation")
+  business    String   @default("") // e.g. "Coffee shop", "SaaS startup", "Real estate"
+  audience    String   @default("") // e.g. "Existing customers", "Cold leads"
+  tone        String   @default("friendly") // friendly | professional | casual | persuasive
+  language    String   @default("en")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  messages    CustomerMessage[]
+}
+
+model CustomerMessage {
+  id              String   @id @default(cuid())
+  conversationId  String
+  conversation    CustomerConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            String   // user | assistant
+  content         String   @default("")
+  meta            String   @default("{}") // JSON: { topics?: string[], draft?: string, channel?: string }
+  tokens          Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([conversationId])
 }

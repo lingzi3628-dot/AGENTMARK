@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { decrypt, maskKey } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +57,16 @@ export async function POST(req: NextRequest) {
     maxAgents: user.maxAgents,
     tokensUsedToday: user.tokensUsedToday,
     tokenResetDate: user.tokenResetDate,
-    glmApiKey: user.glmApiKey,
-    openaiApiKey: user.openaiApiKey,
-    anthropicApiKey: user.anthropicApiKey,
+    // Masked previews only — never expose plaintext to the client
+    glmApiKey: maskKey(user.glmApiKey ? decrypt(user.glmApiKey) : ""),
+    openaiApiKey: maskKey(user.openaiApiKey ? decrypt(user.openaiApiKey) : ""),
+    anthropicApiKey: maskKey(user.anthropicApiKey ? decrypt(user.anthropicApiKey) : ""),
     supabaseUrl: user.supabaseUrl,
-    supabaseAnonKey: user.supabaseAnonKey,
+    supabaseAnonKey: maskKey(user.supabaseAnonKey ? decrypt(user.supabaseAnonKey) : ""),
+    hasGlmKey: !!user.glmApiKey,
+    hasOpenaiKey: !!user.openaiApiKey,
+    hasAnthropicKey: !!user.anthropicApiKey,
+    stripeCustomerId: user.stripeCustomerId,
+    stripePriceId: user.stripePriceId,
   });
 }

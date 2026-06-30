@@ -19,6 +19,11 @@ export interface AppUser {
   anthropicApiKey: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  hasGlmKey: boolean;
+  hasOpenaiKey: boolean;
+  hasAnthropicKey: boolean;
+  stripeCustomerId: string;
+  stripePriceId: string;
 }
 
 interface AuthState {

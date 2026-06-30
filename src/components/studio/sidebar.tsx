@@ -5,7 +5,7 @@ import { Icon } from "@/components/icon";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
-  Sparkles, ChevronRight, X, Plug, Settings,
+  Sparkles, ChevronRight, X, Plug, Settings, MessagesSquare, BarChart3, Crown,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -17,6 +17,9 @@ const NAV: { id: StudioView; label: string; icon: typeof LayoutDashboard; desc: 
   { id: "knowledge", label: "Knowledge", icon: Database, desc: "Context & documents" },
   { id: "publish", label: "Publish", icon: Rocket, desc: "Embed on any website" },
   { id: "integrations", label: "Integrations", icon: Plug, desc: "Connect to platforms" },
+  { id: "customer", label: "Customer Mode", icon: MessagesSquare, desc: "AI talking points & drafts" },
+  { id: "analytics", label: "Analytics", icon: BarChart3, desc: "Usage & token trends" },
+  { id: "billing", label: "Billing", icon: Crown, desc: "Plans & pricing" },
 ];
 
 export function Sidebar() {

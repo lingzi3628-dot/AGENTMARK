@@ -13,7 +13,10 @@ import { TemplatesView } from "@/components/studio/views/templates-view";
 import { KnowledgeView } from "@/components/studio/views/knowledge-view";
 import { PublishView } from "@/components/studio/views/publish-view";
 import { IntegrationsView } from "@/components/studio/views/integrations-view";
+import { CustomerView } from "@/components/studio/views/customer-view";
 import { SettingsView } from "@/components/studio/views/settings-view";
+import { AnalyticsView } from "@/components/studio/views/analytics-view";
+import { BillingView } from "@/components/studio/views/billing-view";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
@@ -83,6 +86,9 @@ export default function Home() {
               {view === "knowledge" && <KnowledgeView />}
               {view === "publish" && <PublishView />}
               {view === "integrations" && <IntegrationsView />}
+              {view === "customer" && <CustomerView />}
+              {view === "analytics" && <AnalyticsView />}
+              {view === "billing" && <BillingView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

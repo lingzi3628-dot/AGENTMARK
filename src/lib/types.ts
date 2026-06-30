@@ -150,4 +150,39 @@ export interface Template {
   createdAt: string;
 }
 
-export type StudioView = "dashboard" | "studio" | "run" | "templates" | "knowledge" | "publish" | "integrations" | "settings";
+export interface CustomApi {
+  id: string;
+  label: string;
+  provider: string;
+  baseUrl: string;
+  modelName: string;
+  maskedKey: string;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerConversation {
+  id: string;
+  title: string;
+  business: string;
+  audience: string;
+  tone: string;
+  language: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StudioView =
+  | "dashboard"
+  | "studio"
+  | "run"
+  | "templates"
+  | "knowledge"
+  | "publish"
+  | "integrations"
+  | "customer"
+  | "analytics"
+  | "billing"
+  | "settings";

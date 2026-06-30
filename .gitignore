@@ -63,3 +63,9 @@ supervisor*.sh
 telegram-poll.sh
 db/*.db
 db/*.db-journal
+
+# Playwright
+/tests/.auth/
+test-results/
+playwright-report/
+playwright/.cache/

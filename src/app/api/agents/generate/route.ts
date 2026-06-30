@@ -4,6 +4,11 @@ import type { WorkflowNode, WorkflowEdge } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 const SYSTEM_PROMPT = `You are an expert at designing AI agent workflows for AGENTMARK, a visual agent builder.
 Given a user's description, design a complete workflow as JSON.
 
@@ -42,26 +47,56 @@ Rules:
 - Choose an icon from: sparkles, bot, brain, code, pen-tool, search, file-text, languages, database, rocket, lightbulb, wand-2
 - Choose category from: productivity, engineering, research, content, support, custom`;
 
+const REFINE_INSTRUCTION = `
+
+You are now in REFINEMENT mode. The conversation above shows the workflow(s) you previously designed.
+Improve the most recent workflow based on the user's new feedback. Rules for refinement:
+- Keep the overall structure unless the user asks to change it.
+- Only modify what the user requested (add/remove/swap nodes, change a model, edit a system prompt, etc.).
+- Preserve existing node ids and edge ids where possible so the user's mental model is stable.
+- ALWAYS return the FULL updated workflow JSON (not a diff, not a summary) in the exact shape defined above.
+- Still output ONLY valid JSON — no markdown, no commentary.`;
+
+interface GenerateBody {
+  description?: string;
+  history?: HistoryMessage[];
+  refine?: boolean;
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const description = (body.description as string)?.trim();
+  const body = (await req.json().catch(() => ({}))) as GenerateBody;
+  const description = (body.description ?? "").trim();
+  const history = Array.isArray(body.history) ? body.history : [];
+  const refine = body.refine === true;
+
   if (!description) {
     return NextResponse.json({ error: "description required" }, { status: 400 });
   }
 
   try {
     // Use the free API directly (no SDK needed) — AGENTMARK Free
+    const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: SYSTEM_PROMPT + (refine ? REFINE_INSTRUCTION : "") },
+    ];
+
+    // Replay prior conversation so the model can refine based on feedback.
+    // Assistant turns are expected to carry the workflow JSON they produced.
+    for (const m of history) {
+      if (m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string") {
+        messages.push({ role: m.role, content: m.content });
+      }
+    }
+
+    const userTurn = refine
+      ? `Refinement request: ${description}`
+      : `Design an agent for: ${description}`;
+    messages.push({ role: "user", content: userTurn });
+
     let raw = "";
     const res = await fetch("https://text.pollinations.ai/openai", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "openai",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Design an agent for: ${description}` },
-        ],
-      }),
+      body: JSON.stringify({ model: "openai", messages }),
     });
     if (res.ok) {
       const data = await res.json();

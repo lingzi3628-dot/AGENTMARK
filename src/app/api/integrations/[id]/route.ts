@@ -21,7 +21,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  // Clean up platform-side webhook before deleting
+  // Clean up platform-side webhook before deleting.
+  // Only Telegram needs server-side cleanup (we registered the webhook ourselves).
+  // WhatsApp + Slack webhooks are configured in their respective dashboards and
+  // auto-expire when the app is uninstalled or the credentials are revoked —
+  // no server-side cleanup needed.
   const integ = await db.integration.findUnique({ where: { id } });
   if (integ?.platform === "telegram") {
     try {

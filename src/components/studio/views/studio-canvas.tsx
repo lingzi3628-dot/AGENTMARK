@@ -12,14 +12,17 @@ import { AgentNode } from "@/components/studio/nodes/agent-node";
 import { InspectorPanel } from "@/components/studio/inspector-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/icon";
 import {
   Save, Play, Plus, Workflow, Sparkles, Loader2, PanelLeft,
+  Undo2, Redo2, Copy, ClipboardPaste, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NODE_PALETTE } from "@/lib/constants";
-import type { NodeKind, WorkflowNode, WorkflowNodeData } from "@/lib/types";
+import { copyNode, pasteNode, hasCopiedNode } from "@/lib/node-clipboard";
+import type { NodeKind, WorkflowNode, WorkflowNodeData, WorkflowEdge } from "@/lib/types";
 
 const nodeTypes = { agent: AgentNode };
 
@@ -33,15 +36,25 @@ export function StudioCanvas() {
 
 function StudioInner() {
   const {
-    activeAgent, agents, nodes, edges, setNodes, setEdges, selectedNodeId,
-    setSelectedNode, upsertAgent, setActiveAgent, setView, setGraph,
+    activeAgent, agents, nodes, edges,
+    setNodes, setEdges, setNodesSilent, setEdgesSilent,
+    selectedNodeId, setSelectedNode, upsertAgent, setActiveAgent,
+    setView, setGraph, removeNode, pushHistory, undo, redo,
     newAgentRequested,
   } = useStudio();
+  // Subscribe to history length so the toolbar buttons re-render reactively
+  // when the undo/redo stacks change.
+  const historyLen = useStudio((s) => s.history.length);
+  const futureLen = useStudio((s) => s.future.length);
+
   const { screenToFlowPosition } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(activeAgent?.name ?? "Untitled Agent");
   const [saving, setSaving] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Tracks whether there's a node in the in-memory clipboard so the Paste
+  // button can enable/disable. Bumped on every copy.
+  const [clipboardVersion, setClipboardVersion] = useState(0);
   const seq = useRef(0);
 
   // Auto-load the most recent agent if none is active (unless the user just
@@ -60,14 +73,25 @@ function StudioInner() {
   }, [activeAgent?.id]);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
-      setNodes(applyNodeChanges(changes, nodes as unknown as Node[]) as unknown as WorkflowNode[]),
-    [nodes, setNodes],
+    (changes: NodeChange[]) => {
+      const next = applyNodeChanges(changes, nodes as unknown as Node[]) as unknown as WorkflowNode[];
+      // "remove" changes (ReactFlow's built-in delete) should be undoable;
+      // pure position/select/dimension changes are silent so we don't pollute
+      // the stack on every drag tick.
+      const hasRemove = changes.some((c) => c.type === "remove");
+      if (hasRemove) setNodes(next);
+      else setNodesSilent(next);
+    },
+    [nodes, setNodes, setNodesSilent],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) =>
-      setEdges(applyEdgeChanges(changes, edges as unknown as Edge[]) as unknown as WorkflowEdge[]),
-    [edges, setEdges],
+    (changes: EdgeChange[]) => {
+      const next = applyEdgeChanges(changes, edges as unknown as Edge[]) as unknown as WorkflowEdge[];
+      const hasRemove = changes.some((c) => c.type === "remove");
+      if (hasRemove) setEdges(next);
+      else setEdgesSilent(next);
+    },
+    [edges, setEdges, setEdgesSilent],
   );
   const onConnect = useCallback(
     (c: Connection) =>
@@ -79,6 +103,12 @@ function StudioInner() {
       ),
     [edges, setEdges],
   );
+
+  // Capture the pre-drag state into history when the user starts dragging a
+  // node. onNodesChange fires silently during the drag itself.
+  const onNodeDragStart = useCallback(() => {
+    pushHistory();
+  }, [pushHistory]);
 
   function addNode(kind: NodeKind, position?: { x: number; y: number }) {
     seq.current += 1;
@@ -102,6 +132,128 @@ function StudioInner() {
     setNodes([...nodes, node]);
     setSelectedNode(id);
   }
+
+  function copySelected() {
+    if (!selectedNodeId) {
+      toast.error("Select a node to copy first");
+      return;
+    }
+    const node = nodes.find((n) => n.id === selectedNodeId);
+    if (!node) return;
+    copyNode(node);
+    setClipboardVersion((v) => v + 1);
+    toast.success("Node copied");
+  }
+
+  function pasteFromClipboard() {
+    const copied = pasteNode();
+    if (!copied) {
+      toast.error("Nothing to paste — copy a node first");
+      return;
+    }
+    seq.current += 1;
+    const newNode: WorkflowNode = {
+      ...copied,
+      id: `${copied.data.kind}-${Date.now()}-${seq.current}`,
+      position: { x: copied.position.x + 50, y: copied.position.y + 50 },
+      // pasteNode already returns a deep copy of data, but make sure we don't
+      // share the same object reference between the original and the paste.
+      data: { ...copied.data },
+    };
+    setNodes([...nodes, newNode]);
+    setSelectedNode(newNode.id);
+    toast.success("Node pasted");
+  }
+
+  function deleteSelected() {
+    if (!selectedNodeId) return;
+    removeNode(selectedNodeId);
+  }
+
+  // Global keyboard shortcuts: undo/redo, copy/paste, delete, escape.
+  // Bind once and read fresh state from the store inside the handler so we
+  // don't have to re-bind on every keystroke.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const inEditable = !!target && (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+      );
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Undo: Cmd/Ctrl+Z
+      if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        if (inEditable) return; // let the browser undo typing
+        e.preventDefault();
+        const s = useStudio.getState();
+        if (s.history.length === 0) return;
+        s.undo();
+        return;
+      }
+      // Redo: Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y
+      if ((mod && e.shiftKey && (e.key === "z" || e.key === "Z")) || (mod && (e.key === "y" || e.key === "Y"))) {
+        if (inEditable) return;
+        e.preventDefault();
+        const s = useStudio.getState();
+        if (s.future.length === 0) return;
+        s.redo();
+        return;
+      }
+      // Copy: Cmd/Ctrl+C
+      if (mod && (e.key === "c" || e.key === "C")) {
+        if (inEditable) return; // let the browser copy selected text
+        const s = useStudio.getState();
+        if (!s.selectedNodeId) return;
+        const node = s.nodes.find((n) => n.id === s.selectedNodeId);
+        if (!node) return;
+        e.preventDefault();
+        copyNode(node);
+        setClipboardVersion((v) => v + 1);
+        toast.success("Node copied");
+        return;
+      }
+      // Paste: Cmd/Ctrl+V
+      if (mod && (e.key === "v" || e.key === "V")) {
+        if (inEditable) return; // let the browser paste
+        const copied = pasteNode();
+        if (!copied) return;
+        e.preventDefault();
+        const s = useStudio.getState();
+        const seqVal = ++seq.current;
+        const newNode: WorkflowNode = {
+          ...copied,
+          id: `${copied.data.kind}-${Date.now()}-${seqVal}`,
+          position: { x: copied.position.x + 50, y: copied.position.y + 50 },
+          data: { ...copied.data },
+        };
+        s.setNodes([...s.nodes, newNode]);
+        s.setSelectedNode(newNode.id);
+        toast.success("Node pasted");
+        return;
+      }
+      // Delete / Backspace: remove selected node
+      if ((e.key === "Delete" || e.key === "Backspace") && !inEditable) {
+        const s = useStudio.getState();
+        if (!s.selectedNodeId) return;
+        e.preventDefault();
+        s.removeNode(s.selectedNodeId);
+        return;
+      }
+      // Escape: deselect
+      if (e.key === "Escape") {
+        const s = useStudio.getState();
+        if (s.selectedNodeId) {
+          s.setSelectedNode(null);
+        }
+        return;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const onDragStart = (e: React.DragEvent, kind: NodeKind) => {
     e.dataTransfer.setData("application/agentmark-kind", kind);
@@ -169,6 +321,13 @@ function StudioInner() {
       setView("run");
     }
   }
+
+  const canUndo = historyLen > 0;
+  const canRedo = futureLen > 0;
+  const hasSelected = !!selectedNodeId;
+  // Touch clipboardVersion so the linter doesn't complain and so we re-read
+  // the module state on every render where this matters.
+  const hasClip = clipboardVersion >= 0 && hasCopiedNode();
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -245,6 +404,10 @@ function StudioInner() {
             onConnect={onConnect}
             onNodeClick={(_, n) => setSelectedNode(n.id)}
             onPaneClick={() => setSelectedNode(null)}
+            onNodeDragStart={onNodeDragStart}
+            // Disable ReactFlow's built-in Backspace-to-delete so our global
+            // handler owns the delete semantics (and respects input focus).
+            deleteKeyCode={null}
             fitView
             fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
             proOptions={{ hideAttribution: true }}
@@ -260,6 +423,48 @@ function StudioInner() {
               maskColor="rgb(0 0 0 / 0.6)"
             />
           </ReactFlow>
+
+          {/* Floating edit toolbar — undo/redo/copy/paste/delete */}
+          <div className="absolute left-3 top-3 z-10">
+            <Card className="flex-row gap-0.5 rounded-lg p-1 shadow-md">
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={undo} disabled={!canUndo}
+                title="Undo (Cmd/Ctrl+Z)" aria-label="Undo"
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={redo} disabled={!canRedo}
+                title="Redo (Cmd/Ctrl+Shift+Z)" aria-label="Redo"
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+              <div className="my-1 w-px self-stretch bg-border" aria-hidden />
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={copySelected} disabled={!hasSelected}
+                title="Copy selected node (Cmd/Ctrl+C)" aria-label="Copy node"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={pasteFromClipboard} disabled={!hasClip}
+                title="Paste node (Cmd/Ctrl+V)" aria-label="Paste node"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={deleteSelected} disabled={!hasSelected}
+                title="Delete selected node (Delete)" aria-label="Delete node"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </Card>
+          </div>
 
           {/* Empty hint */}
           {nodes.length === 0 && (

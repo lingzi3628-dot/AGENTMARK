@@ -1,0 +1,14 @@
+# Nixpacks build configuration for Railway.
+# Locked down so Railway doesn't have to guess how to build AGENTMARK.
+
+[phases.setup]
+nixPkgs = ["openssl"]
+
+[phases.install]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["bun run build"]
+
+[start]
+cmd = "node_modules/.bin/next start"

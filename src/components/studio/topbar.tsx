@@ -16,6 +16,9 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   knowledge: { title: "Knowledge", sub: "Documents and context for your agents" },
   publish: { title: "Publish", sub: "Embed your agent on any website" },
   integrations: { title: "Integrations", sub: "Connect agents to your platforms" },
+  customer: { title: "Customer Mode", sub: "AI-generated talking points & message drafts" },
+  analytics: { title: "Analytics", sub: "Usage, tokens, and trends" },
+  billing: { title: "Billing", sub: "Plans, pricing, and your subscription" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 
