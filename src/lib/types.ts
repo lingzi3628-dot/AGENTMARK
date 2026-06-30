@@ -222,6 +222,8 @@ export type StudioView =
   | "schedules"
   | "approvals"
   | "optimize"
+  | "debug"
+  | "node-metrics"
   | "customer"
   | "analytics"
   | "billing"

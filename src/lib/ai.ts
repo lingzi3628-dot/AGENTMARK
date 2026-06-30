@@ -5,6 +5,8 @@ import type { WorkflowNode, WorkflowEdge, WorkflowNodeData } from "./types";
 import { db } from "./db";
 import { retrieveContext, formatRetrievedChunks } from "./rag";
 import { runSandboxed } from "./sandbox";
+import { withRetry, isRetryableError } from "./retry";
+import { recordNodeMetric } from "./node-metrics";
 
 // Maximum sub-agent recursion depth. The top-level call is depth 0; sub-agents
 // can recurse up to MAX_SUB_AGENT_DEPTH times before the runtime refuses to go
@@ -178,6 +180,7 @@ export async function* executeAgent(
   for (const node of order) {
     const data = node.data;
     const label = data.label || data.kind;
+    const nodeStartedAt = Date.now();
     yield { type: "trace", node: node.id, label, status: "running" };
 
     try {
@@ -275,14 +278,24 @@ export async function* executeAgent(
             if (data.httpHeaders) {
               try { Object.assign(headers, JSON.parse(data.httpHeaders)); } catch { /* ignore */ }
             }
-            const res = await fetch(url, {
-              method,
-              headers,
-              body: method === "POST" ? (data.httpBody ?? undefined) : undefined,
-            });
-            const text = await res.text();
-            const trimmed = text.slice(0, 4000);
-            outputs.set(node.id, `HTTP ${method} ${url} → ${res.status}\n\n${trimmed}`);
+            // Smart retry on transient HTTP failures (5xx, timeouts, network errors)
+            const result = await withRetry(
+              async () => {
+                const res = await fetch(url, {
+                  method,
+                  headers,
+                  body: method === "POST" ? (data.httpBody ?? undefined) : undefined,
+                });
+                if (!res.ok && res.status >= 500) {
+                  throw new Error(`HTTP ${res.status}`);
+                }
+                const text = await res.text();
+                return { status: res.status, text };
+              },
+              { maxRetries: 2 },
+            );
+            const trimmed = result.text.slice(0, 4000);
+            outputs.set(node.id, `HTTP ${method} ${url} → ${result.status}\n\n${trimmed}`);
             totalTokens += Math.ceil(trimmed.length / 4);
           } catch (err) {
             const msg = err instanceof Error ? err.message : "fetch failed";
@@ -652,10 +665,32 @@ export async function* executeAgent(
         outputs.set(node.id, out);
       }
       yield { type: "trace", node: node.id, label, status: "done" };
+      // Record successful node metric
+      recordNodeMetric({
+        nodeId: node.id,
+        nodeLabel: label,
+        nodeKind: data.kind,
+        agentId: ctx.agentId || "",
+        durationMs: Date.now() - nodeStartedAt,
+        tokens: 0, // tokens are tracked separately at the run level
+        status: "done",
+        timestamp: nodeStartedAt,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       outputs.set(node.id, `[error: ${msg}]`);
       yield { type: "trace", node: node.id, label, status: "error" };
+      // Record failed node metric
+      recordNodeMetric({
+        nodeId: node.id,
+        nodeLabel: label,
+        nodeKind: data.kind,
+        agentId: ctx.agentId || "",
+        durationMs: Date.now() - nodeStartedAt,
+        tokens: 0,
+        status: "error",
+        timestamp: nodeStartedAt,
+      });
     }
   }
 
@@ -760,63 +795,80 @@ async function directCompletion(
     { role: "user", content: user || "(empty input)" },
   ];
 
-  // Custom model (user-provided API)
+  // Custom model (user-provided API) — wrapped with retry
   if (model === "custom" && nodeData?.customApiUrl) {
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (nodeData.customApiKey) headers.authorization = `Bearer ${nodeData.customApiKey}`;
-    const res = await fetch(`${nodeData.customApiUrl}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: nodeData.customModelName || "gpt-4o-mini",
-        messages,
-      }),
-    });
-    if (!res.ok) throw new Error(`Custom API ${res.status}`);
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content ?? "";
+    return withRetry(
+      async () => {
+        const res = await fetch(`${nodeData.customApiUrl}/chat/completions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: nodeData.customModelName || "gpt-4o-mini",
+            messages,
+          }),
+        });
+        if (!res.ok) throw new Error(`Custom API ${res.status}`);
+        const data = await res.json();
+        return data?.choices?.[0]?.message?.content ?? "";
+      },
+      { maxRetries: 3 },
+    );
   }
 
   const route = resolveModel(model);
 
-  // GLM API (premium — needs env vars)
+  // GLM API (premium — needs env vars) — wrapped with retry
   if (route.type === "glm" && route.apiUrl && route.apiKey) {
     try {
-      const res = await fetch(`${route.apiUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${route.apiKey}`,
-          "X-Z-AI-From": "Z",
+      const content = await withRetry(
+        async () => {
+          const res = await fetch(`${route.apiUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${route.apiKey}`,
+              "X-Z-AI-From": "Z",
+            },
+            body: JSON.stringify({
+              model: route.apiModel,
+              messages,
+              thinking: { type: "disabled" },
+            }),
+          });
+          if (!res.ok) throw new Error(`GLM API ${res.status}`);
+          const data = await res.json();
+          const c = data?.choices?.[0]?.message?.content;
+          if (!c) throw new Error("GLM API empty response");
+          return c;
         },
-        body: JSON.stringify({
-          model: route.apiModel,
-          messages,
-          thinking: { type: "disabled" },
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const content = data?.choices?.[0]?.message?.content;
-        if (content) return content;
-      }
+        { maxRetries: 2 },
+      );
+      if (content) return content;
     } catch {
       // fall through to free API
     }
   }
 
-  // Free API (no key required) — default for all users
-  const res = await fetch(FREE_API_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: route.apiModel,
-      messages,
-    }),
-  });
-  if (!res.ok) throw new Error(`AGENTMARK Free API ${res.status}`);
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content ?? "";
+  // Free API (no key required) — default for all users.
+  // Wrapped in smart retry with exponential backoff for transient failures.
+  return withRetry(
+    async () => {
+      const res = await fetch(FREE_API_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: route.apiModel,
+          messages,
+        }),
+      });
+      if (!res.ok) throw new Error(`AGENTMARK Free API ${res.status}`);
+      const data = await res.json();
+      return data?.choices?.[0]?.message?.content ?? "";
+    },
+    { maxRetries: 3 },
+  );
 }
 
 async function* streamCompletion(

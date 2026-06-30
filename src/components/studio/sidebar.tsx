@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
   Sparkles, ChevronRight, X, Plug, Settings, MessagesSquare, BarChart3, Crown,
-  KeyRound, Users, Clock, GitBranch, Store, ShieldCheck, Wand2,
+  KeyRound, Users, Clock, GitBranch, Store, ShieldCheck, Wand2, Bug, Activity,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -22,6 +22,8 @@ const NAV: { id: StudioView; label: string; icon: typeof LayoutDashboard; desc: 
   { id: "schedules", label: "Schedules", icon: Clock, desc: "Cron jobs & triggers" },
   { id: "approvals", label: "Approvals", icon: ShieldCheck, desc: "Human-in-the-loop" },
   { id: "optimize", label: "Optimize", icon: Wand2, desc: "AI workflow analyzer" },
+  { id: "debug", label: "Debug", icon: Bug, desc: "Test with sample data" },
+  { id: "node-metrics", label: "Node Metrics", icon: Activity, desc: "Per-node performance" },
   { id: "history", label: "History", icon: GitBranch, desc: "Versions & branches" },
   { id: "customer", label: "Customer Mode", icon: MessagesSquare, desc: "AI talking points & drafts" },
   { id: "analytics", label: "Analytics", icon: BarChart3, desc: "Usage & token trends" },

@@ -24,6 +24,8 @@ import { HistoryView } from "@/components/studio/views/history-view";
 import { MarketplaceView } from "@/components/studio/views/marketplace-view";
 import { ApprovalsView } from "@/components/studio/views/approvals-view";
 import { OptimizeView } from "@/components/studio/views/optimize-view";
+import { DebugView } from "@/components/studio/views/debug-view";
+import { NodeMetricsView } from "@/components/studio/views/node-metrics-view";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
@@ -103,6 +105,8 @@ export default function Home() {
               {view === "marketplace" && <MarketplaceView />}
               {view === "approvals" && <ApprovalsView />}
               {view === "optimize" && <OptimizeView />}
+              {view === "debug" && <DebugView />}
+              {view === "node-metrics" && <NodeMetricsView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />
