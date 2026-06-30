@@ -1,10 +1,12 @@
 // Plan definitions for AGENTMARK billing tiers.
-// Free is the default; Pro and Team are paid upgrades via Stripe Checkout.
+// Free is the default; Pro and Team are paid upgrades via Paystack Checkout.
+// Paystack supports NGN, GHS, ZAR, KES, USD — we price in USD for simplicity.
 
 export interface PlanDef {
   id: "free" | "pro" | "team";
   name: string;
   price: string; // "$0/mo", "$19/mo", "$79/mo"
+  priceUsd: number; // 0, 19, 79 — used for Paystack checkout amount
   maxAgents: number; // 2, 25, 100
   dailyTokenLimit: number; // 100000, 500000, 2000000
   features: string[];
@@ -16,6 +18,7 @@ export const PLANS: PlanDef[] = [
     id: "free",
     name: "Free",
     price: "$0/mo",
+    priceUsd: 0,
     maxAgents: 2,
     dailyTokenLimit: 100000,
     features: [
@@ -30,6 +33,7 @@ export const PLANS: PlanDef[] = [
     id: "pro",
     name: "Pro",
     price: "$19/mo",
+    priceUsd: 19,
     maxAgents: 25,
     dailyTokenLimit: 500000,
     features: [
@@ -46,6 +50,7 @@ export const PLANS: PlanDef[] = [
     id: "team",
     name: "Team",
     price: "$79/mo",
+    priceUsd: 79,
     maxAgents: 100,
     dailyTokenLimit: 2000000,
     features: [
@@ -59,30 +64,19 @@ export const PLANS: PlanDef[] = [
   },
 ];
 
-// Map Stripe price IDs (env) → plan definition. Built once at module load.
+// Map plan id → plan definition.
 export function getPlan(planId: string): PlanDef {
   return PLANS.find((p) => p.id === planId) || PLANS[0];
 }
 
-// Resolve a Stripe price ID → plan id by matching against env vars.
-export function resolvePlanFromPriceId(priceId: string): PlanDef | null {
-  if (!priceId) return null;
-  if (process.env.STRIPE_PRICE_PRO && priceId === process.env.STRIPE_PRICE_PRO) {
-    return getPlan("pro");
-  }
-  if (process.env.STRIPE_PRICE_TEAM && priceId === process.env.STRIPE_PRICE_TEAM) {
-    return getPlan("team");
-  }
-  return null;
-}
-
-// Get the configured Stripe price ID for a plan id ("pro" → STRIPE_PRICE_PRO).
+// Get the configured Paystack plan code for a plan id ("pro" → PAYSTACK_PLAN_PRO env).
+// Paystack plans are created in the dashboard and have codes like "PLN_xxxxx".
 export function priceIdForPlan(planId: "pro" | "team"): string | null {
-  const envVar = planId === "pro" ? "STRIPE_PRICE_PRO" : "STRIPE_PRICE_TEAM";
+  const envVar = planId === "pro" ? "PAYSTACK_PLAN_PRO" : "PAYSTACK_PLAN_TEAM";
   return process.env[envVar] || null;
 }
 
-// Whether Stripe billing is enabled (server-side env check).
+// Whether Paystack billing is enabled (server-side env check).
 export function billingEnabled(): boolean {
-  return !!process.env.STRIPE_SECRET_KEY;
+  return !!process.env.PAYSTACK_SECRET_KEY;
 }

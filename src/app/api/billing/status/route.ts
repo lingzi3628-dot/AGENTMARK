@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { billingEnabled } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/billing/status
-// Returns whether Stripe billing is enabled (i.e. STRIPE_SECRET_KEY is set).
-// The client uses this to decide whether to show "Upgrade" buttons or
-// "Coming soon" disabled state.
+// Reports whether Paystack billing is configured.
+// When PAYSTACK_SECRET_KEY is unset, the UI shows a "Coming Soon" state.
 export async function GET() {
-  return NextResponse.json({ enabled: billingEnabled() });
+  return NextResponse.json({
+    enabled: !!process.env.PAYSTACK_SECRET_KEY,
+    provider: "paystack",
+  });
 }

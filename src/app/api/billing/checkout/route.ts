@@ -1,87 +1,73 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getStripe } from "@/lib/stripe";
-import { billingEnabled } from "@/lib/plans";
+import { initializeTransaction, generateReference, paystackEnabled } from "@/lib/paystack";
+import { getPlan, priceIdForPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/billing/checkout
-// Body: { firebaseUid: string, priceId: string }
-//   - priceId may be either:
-//     (a) the literal Stripe price ID (must match STRIPE_PRICE_PRO or STRIPE_PRICE_TEAM env var), OR
-//     (b) the plan id "pro" / "team" (resolved server-side to the env var).
-// Returns 503 { error: "billing_disabled" } when STRIPE_SECRET_KEY is not set.
-// Returns 400 if the priceId doesn't resolve to a configured plan price.
-// On success returns { url: string } so the client can redirect.
-export async function POST(req: Request) {
-  if (!billingEnabled()) {
-    return NextResponse.json({ error: "billing_disabled" }, { status: 503 });
+// Initialize a Paystack checkout session.
+// Body: { firebaseUid, planId } where planId is "pro" or "team".
+export async function POST(req: NextRequest) {
+  if (!paystackEnabled()) {
+    return NextResponse.json(
+      { error: "billing_disabled", message: "Paystack is not configured yet — coming soon!" },
+      { status: 503 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));
-  const { firebaseUid, priceId } = body as { firebaseUid?: string; priceId?: string };
-  if (!firebaseUid) {
-    return NextResponse.json({ error: "firebaseUid required" }, { status: 400 });
-  }
-  if (!priceId) {
-    return NextResponse.json({ error: "priceId required" }, { status: 400 });
+  const uid = body.firebaseUid as string;
+  const planId = body.planId as "pro" | "team";
+
+  if (!uid || !planId) {
+    return NextResponse.json({ error: "firebaseUid and planId are required" }, { status: 400 });
   }
 
-  // Resolve the incoming priceId → actual Stripe price ID via env vars.
-  // Accepts either the plan id ("pro" / "team") or a direct Stripe price ID
-  // that matches one of the two configured env vars.
-  const proPrice = process.env.STRIPE_PRICE_PRO || "";
-  const teamPrice = process.env.STRIPE_PRICE_TEAM || "";
-  let resolvedPriceId: string | null = null;
+  const user = await db.user.findUnique({ where: { firebaseUid: uid } });
+  if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  if (priceId === "pro" || priceId === proPrice) {
-    resolvedPriceId = proPrice || null;
-  } else if (priceId === "team" || priceId === teamPrice) {
-    resolvedPriceId = teamPrice || null;
+  const plan = getPlan(planId);
+  if (plan.id === "free") {
+    return NextResponse.json({ error: "cannot upgrade to free plan" }, { status: 400 });
   }
 
-  if (!resolvedPriceId) {
-    return NextResponse.json({ error: "unknown_price" }, { status: 400 });
-  }
+  // Amount in USD cents (Paystack expects smallest currency unit)
+  const amountCents = Math.round(plan.priceUsd * 100);
+  const reference = generateReference("am_sub");
 
-  const user = await db.user.findUnique({ where: { firebaseUid } });
-  if (!user) {
-    return NextResponse.json({ error: "user_not_found" }, { status: 404 });
-  }
+  // Build callback URL (where Paystack redirects after checkout)
+  const host = req.nextUrl.searchParams.get("host") || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+  const callbackUrl = `${host}/billing/verify?reference=${reference}`;
 
-  const stripe = getStripe();
-  if (!stripe) {
-    return NextResponse.json({ error: "billing_disabled" }, { status: 503 });
-  }
+  // Look up the Paystack plan code from env vars (set in Paystack dashboard)
+  const planCode = priceIdForPlan(planId);
 
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      line_items: [{ price: resolvedPriceId, quantity: 1 }],
-      client_reference_id: firebaseUid,
-      customer_email: user.email || undefined,
-      ...(user.stripeCustomerId ? { customer: user.stripeCustomerId } : {}),
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/?billing=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/?billing=cancel`,
+    const result = await initializeTransaction({
+      email: user.email,
+      amount: amountCents,
+      reference,
+      callbackUrl,
       metadata: {
-        firebaseUid,
-        priceId: resolvedPriceId,
+        custom_fields: [
+          { display_name: "Plan", variable_name: "plan", value: planId },
+          { display_name: "User ID", variable_name: "user_id", value: user.id },
+          { display_name: "Firebase UID", variable_name: "firebase_uid", value: uid },
+        ],
       },
-      subscription_data: {
-        metadata: {
-          firebaseUid,
-          priceId: resolvedPriceId,
-        },
-      },
+      ...(planCode ? { plan: planCode } : {}),
     });
 
-    return NextResponse.json({ url: session.url });
+    if (!result.status) {
+      return NextResponse.json({ error: result.message || "Paystack init failed" }, { status: 502 });
+    }
+
+    return NextResponse.json({
+      url: result.data.authorization_url,
+      reference: result.data.reference,
+    });
   } catch (err) {
-    console.error("[billing/checkout] stripe error:", err);
-    return NextResponse.json(
-      { error: "stripe_error", message: err instanceof Error ? err.message : "unknown" },
-      { status: 502 },
-    );
+    const msg = err instanceof Error ? err.message : "checkout failed";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

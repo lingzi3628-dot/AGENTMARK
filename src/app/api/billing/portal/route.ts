@@ -1,52 +1,43 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getStripe } from "@/lib/stripe";
-import { billingEnabled } from "@/lib/plans";
+import { getPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/billing/portal
-// Body: { firebaseUid: string }
-// Creates a Stripe Customer Portal session for managing the existing
-// subscription (upgrade, downgrade, cancel, update payment method).
-// Returns 503 { error: "billing_disabled" } when billing is off.
-// Returns 404 if the user has no stripeCustomerId yet.
-// On success returns { url: string }.
-export async function POST(req: Request) {
-  if (!billingEnabled()) {
-    return NextResponse.json({ error: "billing_disabled" }, { status: 503 });
-  }
-
+// Cancel the current subscription (downgrade to free at end of billing period).
+// Paystack doesn't have a customer portal like Stripe — this endpoint lets the user
+// cancel directly from our UI. Requires the Paystack subscription code + email token
+// which we'd need to fetch from Paystack's API or store during checkout.
+//
+// For now, we implement a simple "cancel" that immediately downgrades the user.
+// In production, you'd want to call disableSubscription() in paystack.ts to stop
+// future charges too.
+export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const { firebaseUid } = body as { firebaseUid?: string };
-  if (!firebaseUid) {
-    return NextResponse.json({ error: "firebaseUid required" }, { status: 400 });
+  const uid = body.firebaseUid as string;
+  if (!uid) return NextResponse.json({ error: "firebaseUid required" }, { status: 400 });
+
+  const user = await db.user.findUnique({ where: { firebaseUid: uid } });
+  if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  if (user.plan === "free") {
+    return NextResponse.json({ error: "already on free plan" }, { status: 400 });
   }
 
-  const user = await db.user.findUnique({ where: { firebaseUid } });
-  if (!user) {
-    return NextResponse.json({ error: "user_not_found" }, { status: 404 });
-  }
-  if (!user.stripeCustomerId) {
-    return NextResponse.json({ error: "no_customer" }, { status: 404 });
-  }
+  // Downgrade to free immediately
+  const freePlan = getPlan("free");
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      plan: "free",
+      maxAgents: freePlan.maxAgents,
+      dailyTokenLimit: freePlan.dailyTokenLimit,
+      stripeSubscriptionId: "",
+    },
+  });
 
-  const stripe = getStripe();
-  if (!stripe) {
-    return NextResponse.json({ error: "billing_disabled" }, { status: 503 });
-  }
+  // TODO: also call Paystack disableSubscription() to stop future charges.
+  // This requires storing the subscription code + email token from the webhook payload.
 
-  try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: user.stripeCustomerId,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/`,
-    });
-    return NextResponse.json({ url: session.url });
-  } catch (err) {
-    console.error("[billing/portal] stripe error:", err);
-    return NextResponse.json(
-      { error: "stripe_error", message: err instanceof Error ? err.message : "unknown" },
-      { status: 502 },
-    );
-  }
+  return NextResponse.json({ ok: true, plan: "free" });
 }

@@ -7,9 +7,10 @@ import {
   Crown,
   Loader2,
   Sparkles,
-  ExternalLink,
   Lock,
   ShieldCheck,
+  CreditCard,
+  Bell,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-store";
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +40,8 @@ export function BillingView() {
   const [billingEnabled, setBillingEnabled] = useState<boolean | null>(null);
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [notified, setNotified] = useState(false);
 
   // Fetch billing-enabled status once on mount.
   useEffect(() => {
@@ -74,12 +78,12 @@ export function BillingView() {
     }
   }, [user, setUser]);
 
-  // If the user lands here from a Stripe success redirect, poll once for
+  // If the user lands here from a Paystack success redirect, poll once for
   // the webhook to have updated their plan.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("billing") === "success") {
+    if (params.get("success") === "true" || params.get("billing") === "success") {
       toast.success("Payment received — syncing your plan…");
       const interval = window.setInterval(() => {
         void refreshUser();
@@ -90,6 +94,18 @@ export function BillingView() {
         window.clearTimeout(stop);
       };
     }
+    if (params.get("error")) {
+      const err = params.get("error");
+      const messages: Record<string, string> = {
+        billing_disabled: "Billing is not configured yet.",
+        payment_failed: "Payment failed or was cancelled.",
+        missing_reference: "Missing payment reference.",
+        no_plan: "Could not determine which plan you purchased.",
+        user_not_found: "Could not find your account.",
+        verification_failed: "Payment verification failed.",
+      };
+      toast.error(messages[err] || "Payment error");
+    }
     return undefined;
   }, [refreshUser]);
 
@@ -97,6 +113,7 @@ export function BillingView() {
 
   const userPlan = getPlan(user.plan);
   const userRank = currentRank(user.plan);
+  const isComingSoon = billingEnabled === false;
 
   async function handleCheckout(plan: PlanDef) {
     if (!user) return;
@@ -104,9 +121,6 @@ export function BillingView() {
       toast.info("Billing is coming soon — we'll let you know when payments launch.");
       return;
     }
-    // The client sends the plan id ("pro" / "team") as the priceId; the
-    // server resolves it to the actual STRIPE_PRICE_* env var. This keeps
-    // the Stripe price IDs (server-side secrets) off the client.
     setBusyPlan(plan.id);
     try {
       const res = await fetch("/api/billing/checkout", {
@@ -114,7 +128,7 @@ export function BillingView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           firebaseUid: user!.firebaseUid,
-          priceId: plan.id,
+          planId: plan.id,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -122,12 +136,6 @@ export function BillingView() {
         const err = (data as { error?: string }).error;
         if (err === "billing_disabled") {
           toast.info("Billing is coming soon.");
-          return;
-        }
-        if (err === "unknown_price") {
-          toast.error(
-            `Plan price not configured. Add STRIPE_PRICE_${plan.id.toUpperCase()} env var.`,
-          );
           return;
         }
         throw new Error(err || "checkout_failed");
@@ -145,14 +153,9 @@ export function BillingView() {
     }
   }
 
-  async function handlePortal() {
+  async function handleCancel() {
     if (!user) return;
-    if (!billingEnabled) {
-      toast.info("Billing is coming soon.");
-      return;
-    }
-    if (!user.stripeCustomerId) {
-      toast.info("You don't have an active subscription to manage yet.");
+    if (!confirm("Cancel your subscription? You'll be downgraded to the Free plan at the end of your billing period.")) {
       return;
     }
     setPortalBusy(true);
@@ -162,25 +165,35 @@ export function BillingView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ firebaseUid: user!.firebaseUid }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const err = (data as { error?: string }).error;
-        if (err === "no_customer") {
-          toast.info("You don't have an active subscription to manage yet.");
-          return;
-        }
-        throw new Error(err || "portal_failed");
-      }
-      const url = (data as { url?: string }).url;
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error("no_url");
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to open customer portal");
+      if (!res.ok) throw new Error();
+      toast.success("Subscription cancelled — you're now on the Free plan");
+      void refreshUser();
+    } catch {
+      toast.error("Failed to cancel subscription");
     } finally {
       setPortalBusy(false);
+    }
+  }
+
+  function handleNotifyMe() {
+    // In production, this would POST to a /api/billing/notify endpoint.
+    // For now, just store in localStorage so the user gets a confirmation.
+    if (notifyEmail.trim() && /\S+@\S+\.\S+/.test(notifyEmail)) {
+      try {
+        const existing = JSON.parse(localStorage.getItem("agentmark.notifyList") || "[]");
+        if (!existing.includes(notifyEmail)) {
+          existing.push(notifyEmail);
+          localStorage.setItem("agentmark.notifyList", JSON.stringify(existing));
+        }
+      } catch {
+        // non-fatal
+      }
+      setNotified(true);
+      toast.success("You're on the list! We'll email you when billing launches.", {
+        description: notifyEmail,
+      });
+    } else {
+      toast.error("Please enter a valid email address");
     }
   }
 
@@ -212,20 +225,51 @@ export function BillingView() {
           </Badge>
         </div>
 
-        {/* Disabled-state banner */}
-        {billingEnabled === false && (
-          <Card className="border-dashed border-amber-500/30 bg-amber-500/5 p-4">
-            <div className="flex items-start gap-3">
-              <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
-                  Billing is coming soon
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Paid upgrades aren&apos;t live yet — set the{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">STRIPE_SECRET_KEY</code>{" "}
-                  env var to enable checkout. The Free tier is fully available.
-                </p>
+        {/* COMING SOON banner — prominent */}
+        {isComingSoon && (
+          <Card className="relative overflow-hidden border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card p-5">
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-amber-500/15 blur-2xl" />
+            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-amber-600 dark:text-amber-400">
+                      Billing is Coming Soon
+                    </h3>
+                    <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] uppercase">
+                      In Development
+                    </Badge>
+                  </div>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    We&apos;re integrating{" "}
+                    <span className="font-medium text-foreground">Paystack</span>{" "}
+                    to bring you secure payments across Africa and beyond.
+                    Get notified when billing goes live — sign up below and we&apos;ll email you.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:w-72">
+                {notified ? (
+                  <div className="flex items-center justify-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
+                    <Check className="h-4 w-4" /> You&apos;re on the list!
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      type="email"
+                      value={notifyEmail}
+                      onChange={(e) => setNotifyEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="h-9 text-sm"
+                    />
+                    <Button onClick={handleNotifyMe} size="sm" className="gap-1.5">
+                      <Bell className="h-3.5 w-3.5" /> Notify me
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </Card>
@@ -238,7 +282,7 @@ export function BillingView() {
             const isUpgrade = PLAN_RANK[plan.id] > userRank;
             const isDowngrade = PLAN_RANK[plan.id] < userRank;
             const busy = busyPlan === plan.id;
-            const disabled = billingEnabled === false || busy || isCurrent || billingEnabled === null;
+            const disabled = isComingSoon || busy || isCurrent || billingEnabled === null;
 
             return (
               <Card
@@ -282,7 +326,7 @@ export function BillingView() {
                   >
                     <Check className="h-3.5 w-3.5" /> Current plan
                   </Badge>
-                ) : billingEnabled === false ? (
+                ) : isComingSoon ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -294,7 +338,7 @@ export function BillingView() {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      Stripe is not configured on this deployment.
+                      Paystack billing launches soon — sign up above to be notified.
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -319,44 +363,45 @@ export function BillingView() {
           })}
         </div>
 
-        {/* Manage subscription */}
-        <Card className="p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <ShieldCheck className="h-5 w-5" />
+        {/* Manage subscription — only shown when billing is enabled and user has a subscription */}
+        {!isComingSoon && user.plan !== "free" && (
+          <Card className="p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">Manage your subscription</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Cancel your subscription anytime — you&apos;ll be downgraded to Free at the end of your billing period.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold">Manage your subscription</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Update payment method, switch plans, or cancel anytime via the Stripe customer portal.
-                </p>
-              </div>
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                disabled={portalBusy}
+                className="gap-1.5 text-destructive hover:text-destructive"
+              >
+                {portalBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CreditCard className="h-4 w-4" />
+                )}
+                Cancel Subscription
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              onClick={handlePortal}
-              disabled={
-                portalBusy ||
-                billingEnabled === false ||
-                billingEnabled === null ||
-                !user.stripeCustomerId
-              }
-              className="gap-1.5"
-            >
-              {portalBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ExternalLink className="h-4 w-4" />
-              )}
-              Customer Portal
-            </Button>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Trust footer */}
         <p className="text-center text-xs text-muted-foreground">
-          Payments are securely processed by Stripe. AGENTMARK never sees or stores your card details.
+          {isComingSoon ? (
+            <>Payments will be securely processed by <span className="font-medium text-foreground">Paystack</span> when billing launches. AGENTMARK never sees or stores your card details.</>
+          ) : (
+            <>Payments are securely processed by <span className="font-medium text-foreground">Paystack</span>. AGENTMARK never sees or stores your card details.</>
+          )}
         </p>
       </div>
     </div>
