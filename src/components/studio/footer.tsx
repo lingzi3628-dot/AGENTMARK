@@ -11,7 +11,7 @@ export function StudioFooter() {
           <span>AGENTMARK — Build, run & ship AI agents</span>
         </div>
         <div className="flex items-center gap-3">
-          <span>Powered by GLM models</span>
+          <span>Powered by AGENTMARK Free • 100K tokens/day</span>
         </div>
       </div>
     </footer>

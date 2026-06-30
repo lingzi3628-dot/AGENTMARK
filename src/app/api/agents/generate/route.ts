@@ -51,17 +51,38 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      model: "glm-4.6",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Design an agent for: ${description}` },
-      ],
-      thinking: { type: "disabled" },
-    });
+    // Try the SDK first, then fall back to free API
+    let raw = "";
+    try {
+      const zai = await ZAI.create();
+      const completion = await zai.chat.completions.create({
+        model: "glm-4.6",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Design an agent for: ${description}` },
+        ],
+        thinking: { type: "disabled" },
+      });
+      raw = completion?.choices?.[0]?.message?.content ?? "";
+    } catch {
+      // Free API fallback (no key required) — AGENTMARK Free
+      const res = await fetch("https://text.pollinations.ai/openai", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "openai",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: `Design an agent for: ${description}` },
+          ],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        raw = data?.choices?.[0]?.message?.content ?? "";
+      }
+    }
 
-    const raw = completion?.choices?.[0]?.message?.content ?? "";
     // Extract JSON from the response (handle markdown code fences)
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {

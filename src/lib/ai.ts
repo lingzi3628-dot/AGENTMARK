@@ -400,34 +400,67 @@ async function runCompletion(
   return directCompletion(system, user, model, history);
 }
 
-/** Direct HTTP completion — works without the SDK, using env vars or user API key. */
+/**
+ * AGENTMARK Free — default free AI backend (no API key required).
+ * Uses the free text generation API. Branded as "AGENTMARK Free" to users.
+ * Falls back to GLM API (via env vars) if configured.
+ */
+
+// Free API endpoints (no key needed)
+const FREE_API_URL = "https://text.pollinations.ai/openai";
+const FREE_MODELS = ["openai", "mistral", "llama", "qwen"];
+
+/** Direct HTTP completion — tries GLM env vars first, then free API. */
 async function directCompletion(
   system: string,
   user: string,
   model: WorkflowNodeData["provider"] | undefined,
   history: { role: "user" | "assistant"; content: string }[],
 ): Promise<string> {
-  const baseUrl = process.env.ZAI_BASE_URL || "https://internal-api.z.ai/v1";
-  const apiKey = process.env.ZAI_API_KEY || "Z.ai";
   const messages = [
     { role: "system", content: system },
     ...history.slice(-6),
     { role: "user", content: user || "(empty input)" },
   ];
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+
+  // 1. Try GLM API if env vars are configured (paid/premium)
+  const glmUrl = process.env.ZAI_BASE_URL;
+  const glmKey = process.env.ZAI_API_KEY;
+  if (glmUrl && glmKey) {
+    try {
+      const res = await fetch(`${glmUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${glmKey}`,
+          "X-Z-AI-From": "Z",
+        },
+        body: JSON.stringify({
+          model: model ?? "glm-4.5-air",
+          messages,
+          thinking: { type: "disabled" },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (content) return content;
+      }
+    } catch {
+      // fall through to free API
+    }
+  }
+
+  // 2. Free API (no key required) — default for all users
+  const res = await fetch(FREE_API_URL, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-      "X-Z-AI-From": "Z",
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      model: model ?? "glm-4.5-air",
+      model: FREE_MODELS[0],
       messages,
-      thinking: { type: "disabled" },
     }),
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`AGENTMARK Free API ${res.status}`);
   const data = await res.json();
   return data?.choices?.[0]?.message?.content ?? "";
 }
@@ -486,35 +519,85 @@ async function* streamCompletion(
   yield* directStream(system, user, model, history);
 }
 
-/** Direct streaming via fetch — works on Railway with env vars. */
+/** Direct streaming via fetch — tries GLM env vars first, then free API. */
 async function* directStream(
   system: string,
   user: string,
   model: WorkflowNodeData["provider"] | undefined,
   history: { role: "user" | "assistant"; content: string }[],
 ): AsyncGenerator<string> {
-  const baseUrl = process.env.ZAI_BASE_URL || "https://internal-api.z.ai/v1";
-  const apiKey = process.env.ZAI_API_KEY || "Z.ai";
   const messages = [
     { role: "system", content: system },
     ...history.slice(-6),
     { role: "user", content: user || "(empty input)" },
   ];
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+
+  // 1. Try GLM API if env vars are configured
+  const glmUrl = process.env.ZAI_BASE_URL;
+  const glmKey = process.env.ZAI_API_KEY;
+  if (glmUrl && glmKey) {
+    try {
+      const res = await fetch(`${glmUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${glmKey}`,
+          "X-Z-AI-From": "Z",
+        },
+        body: JSON.stringify({
+          model: model ?? "glm-4.5-air",
+          messages,
+          stream: true,
+          thinking: { type: "disabled" },
+        }),
+      });
+      if (res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (payload === "[DONE]") return;
+            try {
+              const json = JSON.parse(payload);
+              const delta = json?.choices?.[0]?.delta?.content;
+              if (delta) yield delta as string;
+            } catch {
+              // partial
+            }
+          }
+        }
+        return;
+      }
+    } catch {
+      // fall through to free API
+    }
+  }
+
+  // 2. Free API (no key required) — default for all users
+  const res = await fetch(FREE_API_URL, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-      "X-Z-AI-From": "Z",
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      model: model ?? "glm-4.5-air",
+      model: FREE_MODELS[0],
       messages,
       stream: true,
-      thinking: { type: "disabled" },
     }),
   });
-  if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
+  if (!res.ok || !res.body) {
+    // Non-streaming fallback for free API
+    const text = await directCompletion(system, user, model, history);
+    yield text;
+    return;
+  }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
