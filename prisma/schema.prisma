@@ -125,4 +125,20 @@ model Integration {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  messages  MessageLog[]
+}
+
+model MessageLog {
+  id            String   @id @default(cuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  direction     String   // incoming | outgoing
+  platform      String   // telegram | whatsapp | slack | ...
+  senderName    String   @default("")
+  senderId      String   @default("")
+  content       String   @default("")
+  status        String   @default("delivered") // delivered | failed | pending
+  tokens        Int      @default(0)
+  durationMs    Int      @default(0)
+  createdAt     DateTime @default(now())
 }

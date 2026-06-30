@@ -21,6 +21,7 @@ import { useStudio } from "@/lib/store";
 import { Icon } from "@/components/icon";
 import { PLATFORMS } from "@/lib/constants";
 import type { Integration } from "@/lib/types";
+import { MonitoringPanel } from "@/components/studio/monitoring-panel";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -406,6 +407,13 @@ export function IntegrationsView() {
         {/* Loading skeleton */}
         {loading && integrations.length === 0 ? null : null}
       </section>
+
+      {/* Live monitoring panel */}
+      {activeAgent && integrations.length > 0 && (
+        <section aria-label="Monitoring" className="mt-8">
+          <MonitoringPanel agentId={activeAgent.id} />
+        </section>
+      )}
 
       {/* Connected integrations list */}
       <section aria-label="Connected integrations" className="mt-8">

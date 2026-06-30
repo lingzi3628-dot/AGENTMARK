@@ -80,12 +80,27 @@ export async function POST(req: NextRequest) {
   const nodes: WorkflowNode[] = JSON.parse(agent.nodes);
   const edges: WorkflowEdge[] = JSON.parse(agent.edges);
 
+  // Log the incoming message
+  await db.messageLog.create({
+    data: {
+      integrationId: targetIntegration.id,
+      direction: "incoming",
+      platform: "telegram",
+      senderName: msg.chat.first_name || msg.chat.username || "Unknown",
+      senderId: String(chatId),
+      content: userText.slice(0, 4000),
+      status: "delivered",
+    },
+  }).catch(() => undefined);
+
   // Send a "typing..." indicator
   await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, action: "typing" }),
   }).catch(() => undefined);
+
+  const startedAt = Date.now();
 
   // Run the agent (non-streaming — collect the full output)
   let output = "";
@@ -110,6 +125,23 @@ export async function POST(req: NextRequest) {
     await sendTelegramMessage(botToken, chatId, chunk);
   }
 
+  const durationMs = Date.now() - startedAt;
+
+  // Log the outgoing reply
+  await db.messageLog.create({
+    data: {
+      integrationId: targetIntegration.id,
+      direction: "outgoing",
+      platform: "telegram",
+      senderName: agent.name,
+      senderId: String(chatId),
+      content: output.slice(0, 4000),
+      status: "delivered",
+      tokens: Math.ceil(output.length / 4),
+      durationMs,
+    },
+  }).catch(() => undefined);
+
   // Record the run in history
   await db.runHistory.create({
     data: {
@@ -118,7 +150,7 @@ export async function POST(req: NextRequest) {
       output: output.slice(0, 16000),
       status: "completed",
       tokens: Math.ceil(output.length / 4),
-      duration: 0,
+      duration: durationMs,
     },
   }).catch(() => undefined);
 

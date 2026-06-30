@@ -243,3 +243,24 @@ Work Log:
 
 Stage Summary:
 - Telegram bots now actually reply to messages. The full pipeline: user messages bot → Telegram forwards to our webhook → we run the agent → we send the reply back via Telegram's API. The only requirement is that the server is publicly reachable (Telegram must be able to call the webhook URL).
+
+---
+Task ID: MONITOR
+Agent: main
+Task: Keep server alive + add monitoring system to Integrations
+
+Work Log:
+- Prisma: added MessageLog model (integrationId, direction, platform, senderName, senderId, content, status, tokens, durationMs, createdAt). Linked to Integration with cascade delete.
+- Telegram webhook: now logs every incoming message AND outgoing reply to MessageLog with sender info, content, tokens, and duration.
+- Created GET /api/agents/[id]/monitoring: returns per-integration stats — health (active/inactive/error via live Telegram getMe check), message counts (in/out/total), last message (direction, content preview, sender, time), uptime (age). Auto-checks Telegram bot reachability on each request.
+- Created MonitoringPanel component: live auto-refreshing (15s) panel showing:
+  - Summary stats: messages received, replies sent, active connections
+  - Per-integration cards with: platform icon, health badge (pulsing green for active), message counts (in/out), last message preview + time, uptime
+  - Health badges: Active (green pulse), Error (red), Inactive, Disabled
+  - Refresh button
+- Added MonitoringPanel to IntegrationsView (shows when agent has integrations).
+- Keep-alive system: created keep-alive-cron.sh that restarts Next.js + Telegram polling bridge if dead. Created supervisor2.sh that monitors both processes in a loop. Updated telegram-poll.sh to accept INTEG_ID from env var.
+- Verified: monitoring API returns "Telegram: active | 6in/5out | Bot @Agentmark_test_bot is reachable". Polling bridge processed 5 pending messages successfully. Login screen renders AGENTMARK branding.
+
+Stage Summary:
+- Monitoring system is live: shows connection status, message counts, last message, and health for each integration. Auto-refreshes every 15s. Telegram bot @Agentmark_test_bot is active and replying to messages. Keep-alive scripts created — server needs to be restarted if sandbox sleeps (message me to restart).

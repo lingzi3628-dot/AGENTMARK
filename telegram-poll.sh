@@ -5,12 +5,13 @@
 
 cd /home/z/my-project
 
-TOKEN="8955958395:AAHHV5BKO0JMKL5ng-aMPIfyn1yUnPNleSo"
-INTEG_ID="cmr064km80001n6smsncy781j"
+TOKEN="${TELEGRAM_BOT_TOKEN:-8955958395:AAHHV5BKO0JMKL5ng-aMPIfyn1yUnPNleSo}"
+INTEG_ID="${TELEGRAM_INTEG_ID:-cmr064km80001n6smsncy781j}"
 WEBHOOK_URL="http://localhost:3000/api/webhooks/telegram?i=$INTEG_ID"
 OFFSET=0
 
-echo "[poll] Starting Telegram long-polling bridge for @Agentmark_test_bot"
+echo "[poll] Starting Telegram long-polling bridge"
+echo "[poll] Integration ID: $INTEG_ID"
 echo "[poll] Webhook target: $WEBHOOK_URL"
 
 # Delete any existing webhook so getUpdates works
