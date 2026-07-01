@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "next dev -p 3000",
     "build": "node scripts/prisma-config.js && prisma generate && next build",
     "vercel-build": "node scripts/prisma-config.js && prisma generate && prisma db push --accept-data-loss && next build",
     "start": "node_modules/.bin/next start",
