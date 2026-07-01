@@ -492,3 +492,22 @@ model OAuthToken {
   @@unique([userId, provider])
   @@index([userId])
 }
+
+// Stripe Connect — lets users connect their own Stripe account to sell
+// templates on the marketplace. The platform takes a configurable fee
+// (default 20%) and the rest goes to the creator's Stripe account.
+model StripeConnection {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  stripeAccountId String   @unique
+  // Details from Stripe (refreshed on each connect)
+  email           String   @default("")
+  displayName     String   @default("")
+  country         String   @default("")
+  // Whether the account can receive payments (charges_enabled on Stripe)
+  chargesEnabled  Boolean  @default(false)
+  // Whether onboarding is complete (details submitted)
+  detailsSubmitted Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

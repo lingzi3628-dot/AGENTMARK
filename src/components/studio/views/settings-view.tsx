@@ -19,6 +19,7 @@ import {
 import {
   KeyRound, Database, BarChart3, Crown, LogOut, Loader2, Check, Save,
   Cpu, Zap, AlertTriangle, Trash2, Plus, Shield, Eye, EyeOff, Plug, DollarSign,
+  CreditCard, ExternalLink, Store,
 } from "lucide-react";
 import { signOut } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -591,6 +592,9 @@ export function SettingsView() {
           </div>
         </Card>
 
+        {/* Stripe Connect — for marketplace sellers */}
+        <StripeConnectSection uid={user.firebaseUid} />
+
         {/* Save button */}
         <div className="flex gap-2">
           <Button onClick={saveKeys} disabled={saving} className="gap-1.5">
@@ -620,5 +624,181 @@ function KeyField({ label, value, masked, onChange }: { label: string; value: st
       />
       {masked && <p className="flex items-center gap-1 text-[11px] text-emerald-500"><Check className="h-3 w-3" /> {masked}</p>}
     </div>
+  );
+}
+
+function StripeConnectSection({ uid }: { uid: string }) {
+  const [status, setStatus] = useState<{
+    enabled: boolean;
+    connected: boolean;
+    connection?: {
+      id: string;
+      email: string;
+      displayName: string;
+      country: string;
+      chargesEnabled: boolean;
+      detailsSubmitted: boolean;
+    };
+    loginUrl?: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/stripe/status?uid=${uid}`);
+        if (cancelled) return;
+        if (res.ok) {
+          setStatus(await res.json());
+        } else {
+          setStatus({ enabled: false, connected: false });
+        }
+      } catch {
+        setStatus({ enabled: false, connected: false });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [uid]);
+
+  async function handleConnect() {
+    setConnecting(true);
+    try {
+      const res = await fetch(`/api/stripe/connect?uid=${uid}`);
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to start Stripe Connect");
+        return;
+      }
+      if (data.connected) {
+        // Already connected — just refresh
+        setStatus((s) => s ? { ...s, connected: true, connection: data.connection } : s);
+        toast.success("Stripe account is already connected");
+        return;
+      }
+      // Redirect to Stripe OAuth
+      window.location.href = data.authUrl;
+    } catch {
+      toast.error("Failed to connect Stripe");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!confirm("Disconnect your Stripe account? You won't be able to sell paid templates until you reconnect.")) return;
+    try {
+      const res = await fetch(`/api/stripe/disconnect?uid=${uid}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Stripe disconnected");
+      setStatus((s) => s ? { ...s, connected: false, connection: undefined, loginUrl: null } : s);
+    } catch {
+      toast.error("Failed to disconnect");
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card className="p-5">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Loading Stripe status…</span>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <CreditCard className="h-5 w-5 text-primary" />
+        <h3 className="font-semibold">Stripe Connect</h3>
+        {status?.enabled === false && (
+          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+            Not configured
+          </Badge>
+        )}
+      </div>
+
+      <p className="mb-4 flex items-start gap-1.5 text-xs text-muted-foreground">
+        <Store className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+        <span>
+          Connect your Stripe account to sell paid templates on the marketplace.
+          The platform takes a 20% fee; the rest goes directly to your Stripe account.
+        </span>
+      </p>
+
+      {status?.enabled === false ? (
+        <div className="rounded-lg border border-dashed border-border p-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            Stripe is not configured on this deployment.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Set <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">STRIPE_SECRET_KEY</code> and{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">STRIPE_CONNECT_CLIENT_ID</code> env vars to enable.
+          </p>
+        </div>
+      ) : status?.connected && status.connection ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <Check className="h-5 w-5 shrink-0 text-emerald-500" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{status.connection.displayName || status.connection.email || "Stripe account"}</span>
+                {status.connection.chargesEnabled ? (
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px]">
+                    Ready to receive payments
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-500 text-[10px]">
+                    Onboarding incomplete
+                  </Badge>
+                )}
+              </div>
+              {status.connection.email && (
+                <p className="text-xs text-muted-foreground">{status.connection.email}</p>
+              )}
+              {!status.connection.chargesEnabled && (
+                <p className="mt-1 text-xs text-amber-500">
+                  Complete your Stripe onboarding to start receiving payments.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {status.loginUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => status.loginUrl && window.open(status.loginUrl, "_blank")}
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Stripe Dashboard
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-destructive hover:text-destructive"
+              onClick={handleDisconnect}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Disconnect
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button onClick={handleConnect} disabled={connecting} className="gap-1.5">
+          {connecting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <CreditCard className="h-4 w-4" />
+          )}
+          Connect Stripe Account
+        </Button>
+      )}
+    </Card>
   );
 }

@@ -29,7 +29,9 @@ AGENTMARK ships with locked-down Nixpacks configuration (`nixpacks.toml` + `rail
 | `APP_ENCRYPTION_KEY` | ✅ Yes | 64-char hex string used for AES-256-GCM encryption of user-supplied API keys. Generate one with `openssl rand -hex 32`. If unset, the app falls back to a deterministic dev key (loud console warning — never use in production). |
 | `ZAI_BASE_URL` | Optional | Override the Z.AI SDK base URL. |
 | `ZAI_API_KEY` | Optional | Z.AI API key for the built-in LLM provider. Users can also supply their own via BYOK. |
-| `STRIPE_SECRET_KEY` | Optional | Stripe key for the billing/upgrade flow. Omit to disable paid plans. |
+| `PAYSTACK_SECRET_KEY` | Optional | Paystack key for the billing/upgrade flow. Omit to show "Coming Soon" for paid plans. |
+| `PAYSTACK_PLAN_PRO` | Optional | Paystack plan code for the Pro tier. |
+| `PAYSTACK_PLAN_TEAM` | Optional | Paystack plan code for the Team tier. |
 | `WHATSAPP_VERIFY_TOKEN` | Optional | Any string — used to verify Meta WhatsApp webhooks. Must match the value you enter in the Meta dashboard. |
 | `SLACK_SIGNING_SECRET` | Optional | Used per-integration (also stored in each integration's config), but a global fallback can be set here. |
 

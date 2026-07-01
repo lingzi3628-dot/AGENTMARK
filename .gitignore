@@ -65,6 +65,12 @@ telegram-poll.sh
 db/*.db
 db/*.db-journal
 
+# Internal development notes (not for public repo)
+worklog.md
+worklog*.md
+agent-ctx/
+.zscripts/
+
 # Playwright
 /tests/.auth/
 test-results/
