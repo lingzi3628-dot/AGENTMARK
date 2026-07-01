@@ -113,6 +113,10 @@ AGENTMARK is a full-stack, AI-native automation platform that lets you design mu
 
 ### Local Development
 
+**Full step-by-step guide:** See [LOCAL_SETUP.md](./LOCAL_SETUP.md) for Windows, macOS, and Linux instructions (including Firebase setup).
+
+**Quick version (if you already have Bun + Firebase):**
+
 ```bash
 git clone https://github.com/lingzi3628-dot/AGENTMARK.git
 cd AGENTMARK
@@ -122,7 +126,7 @@ bun install
 Create a `.env` file (copy from `.env.example`):
 
 ```env
-DATABASE_URL=file:/home/z/my-project/db/custom.db
+DATABASE_URL=file:./db/custom.db
 APP_ENCRYPTION_KEY=<run: openssl rand -hex 32>
 NEXT_PUBLIC_FIREBASE_API_KEY=<from firebase console>
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=yourproject.firebaseapp.com
@@ -132,13 +136,16 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000
 NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:000000000000
 ```
 
-Start the dev server:
+Set up the database and start the dev server:
 
 ```bash
+bunx prisma db push
 bun run dev
 ```
 
 Open http://localhost:3000 and sign in with Google.
+
+> **Don't have Bun installed?** See [LOCAL_SETUP.md](./LOCAL_SETUP.md) for installation instructions (Windows/Mac/Linux). You can also use `npm` instead of `bun`.
 
 ---
 
