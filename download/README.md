@@ -27,8 +27,8 @@ AGENTMARK ships with locked-down Nixpacks configuration (`nixpacks.toml` + `rail
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | ✅ Yes | Firebase sender ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | ✅ Yes | Firebase app ID |
 | `APP_ENCRYPTION_KEY` | ✅ Yes | 64-char hex string used for AES-256-GCM encryption of user-supplied API keys. Generate one with `openssl rand -hex 32`. If unset, the app falls back to a deterministic dev key (loud console warning — never use in production). |
-| `ZAI_BASE_URL` | Optional | Override the Z.AI SDK base URL. |
-| `ZAI_API_KEY` | Optional | Z.AI API key for the built-in LLM provider. Users can also supply their own via BYOK. |
+| `AI_BASE_URL` | Optional | Override the AI provider base URL (e.g. https://open.bigmodel.cn/api/paas/v4). |
+| `AI_API_KEY` | Optional | AI API key for the built-in LLM provider (GLM). Users can also supply their own via BYOK. |
 | `PAYSTACK_SECRET_KEY` | Optional | Paystack key for the billing/upgrade flow. Omit to show "Coming Soon" for paid plans. |
 | `PAYSTACK_PLAN_PRO` | Optional | Paystack plan code for the Pro tier. |
 | `PAYSTACK_PLAN_TEAM` | Optional | Paystack plan code for the Team tier. |

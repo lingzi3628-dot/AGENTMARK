@@ -45,6 +45,7 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   playground: { title: "API Playground", sub: "Test the REST API interactively" },
   "webhook-tester": { title: "Webhook Tester", sub: "Send test requests to any webhook" },
   comparison: { title: "Compare Agents", sub: "Side-by-side agent statistics" },
+  "local-models": { title: "Local Models", sub: "Connect to free, private, offline AI models" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 

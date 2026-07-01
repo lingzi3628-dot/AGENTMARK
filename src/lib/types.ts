@@ -20,7 +20,7 @@ export type ModelProvider =
   | "free-mistral"
   | "free-llama"
   | "free-qwen"
-  // GLM models (premium, needs ZAI_API_KEY)
+  // GLM models (premium, needs AI_API_KEY)
   | "glm-4.6"
   | "glm-4.5"
   | "glm-4.5-air"
@@ -240,6 +240,7 @@ export type StudioView =
   | "playground"
   | "webhook-tester"
   | "comparison"
+  | "local-models"
   | "settings";
 
 export interface TemplateShare {

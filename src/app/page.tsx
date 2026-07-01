@@ -35,6 +35,7 @@ import { PromptLibraryView } from "@/components/studio/views/prompt-library-view
 import { ApiPlaygroundView } from "@/components/studio/views/api-playground-view";
 import { WebhookTesterView } from "@/components/studio/views/webhook-tester-view";
 import { AgentComparisonView } from "@/components/studio/views/agent-comparison-view";
+import { LocalModelsView } from "@/components/studio/views/local-models-view";
 import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { TermsAcceptance } from "@/components/studio/terms-acceptance";
@@ -148,6 +149,7 @@ export default function Home() {
               {view === "playground" && <ApiPlaygroundView />}
               {view === "webhook-tester" && <WebhookTesterView />}
               {view === "comparison" && <AgentComparisonView />}
+              {view === "local-models" && <LocalModelsView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

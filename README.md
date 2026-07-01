@@ -205,7 +205,7 @@ See [`.env.example`](./.env.example) for the complete list. Key variables:
 | `PAYSTACK_SECRET_KEY` | ❌ | Enable billing (leave empty for "Coming Soon") |
 | `SCHEDULER_API_KEY` | ❌ | Protects cron endpoint |
 | `EMAIL_POLL_API_KEY` | ❌ | Protects email poller |
-| `ZAI_API_KEY` | ❌ | GLM-4.6 model access |
+| `AI_API_KEY` | ❌ | GLM-4.6 model access |
 | `TWILIO_*` | ❌ | Voice + SMS agents |
 | `GOOGLE_OAUTH_CLIENT_ID` | ❌ | Google OAuth connector |
 | `GITHUB_OAUTH_CLIENT_ID` | ❌ | GitHub OAuth connector |
@@ -223,7 +223,7 @@ See [`.env.example`](./.env.example) for the complete list. Key variables:
 | **Database** | Prisma ORM (SQLite for dev, Postgres for prod) |
 | **Auth** | Firebase Google Login |
 | **Canvas** | @xyflow/react (React Flow) |
-| **AI** | z-ai-web-dev-sdk, Xenova Transformers (RAG embeddings) |
+| **AI** | Direct HTTP API (OpenAI-compatible), Xenova Transformers (RAG embeddings) |
 | **Charts** | Recharts |
 | **Payments** | Paystack |
 | **Email** | ImapFlow + Nodemailer |

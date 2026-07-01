@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   // that Vercel can deploy without needing node_modules at runtime.
   output: "standalone",
   // Allow cross-origin requests from Vercel preview URLs
-  allowedDevOrigins: ["*.space-z.ai", "*.vercel.app"],
+  allowedDevOrigins: ["*.vercel.app", "*.railway.app"],
   // External packages that shouldn't be bundled (Prisma, sharp, etc.)
   serverExternalPackages: ["@prisma/client", "sharp"],
 };

@@ -43,7 +43,7 @@ export const MODELS: ModelDef[] = [
     contextWindow: "32K",
     badge: "Free",
   },
-  // GLM models — premium, requires ZAI_API_KEY env var
+  // GLM models — premium, requires AI_API_KEY env var
   {
     id: "glm-4.6",
     name: "GLM-4.6",

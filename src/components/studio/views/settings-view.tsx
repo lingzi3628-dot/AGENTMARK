@@ -23,6 +23,7 @@ import {
   CreditCard, ExternalLink, Store, BarChart2,
 } from "lucide-react";
 import { isAnalyticsEnabled, setAnalyticsEnabled, getInstanceId } from "@/lib/analytics";
+import { UserPaymentSettings } from "@/components/studio/user-payment-settings";
 import { signOut } from "@/lib/firebase";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -599,6 +600,9 @@ export function SettingsView() {
 
         {/* Analytics Consent — opt-in to anonymous usage analytics */}
         <AnalyticsConsentSection />
+
+        {/* User Payment Settings — let users set their own payment provider */}
+        <UserPaymentSettings />
 
         {/* Save button */}
         <div className="flex gap-2">

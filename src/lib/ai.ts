@@ -1,6 +1,3 @@
-import ZAI from "z-ai-web-dev-sdk";
-import { promises as fs } from "fs";
-import path from "path";
 import type { WorkflowNode, WorkflowEdge, WorkflowNodeData } from "./types";
 import { db } from "./db";
 import { retrieveContext, formatRetrievedChunks } from "./rag";
@@ -13,33 +10,10 @@ import { recordNodeMetric } from "./node-metrics";
 // deeper. Prevents accidental infinite loops when agents reference each other.
 const MAX_SUB_AGENT_DEPTH = 3;
 
-// Singleton ZAI client
-let _zai: ZAI | null = null;
-let _triedInit = false;
-
-// Ensure the z-ai config file exists. On Railway/production, the config is
-// provided via env vars (ZAI_BASE_URL, ZAI_API_KEY) — we write it to a file
-// that the SDK can read. On the sandbox, the file already exists at /etc/.
-async function ensureConfig() {
-  const configPath = path.join(process.cwd(), ".z-ai-config");
-  try {
-    await fs.access(configPath);
-    return; // already exists
-  } catch {
-    // doesn't exist — create from env vars if available
-  }
-  const baseUrl = process.env.ZAI_BASE_URL || process.env.NEXT_PUBLIC_ZAI_BASE_URL;
-  const apiKey = process.env.ZAI_API_KEY || process.env.NEXT_PUBLIC_ZAI_API_KEY;
-  if (baseUrl && apiKey) {
-    const config = JSON.stringify({ baseUrl, apiKey });
-    await fs.writeFile(configPath, config, "utf-8").catch(() => undefined);
-  }
-}
-
-export async function getZAI(): Promise<ZAI | null> {
-  // Always return null — we use the direct HTTP fallback (free API) exclusively.
-  // The SDK requires a config file that doesn't exist on Railway/production.
-  // If ZAI_BASE_URL + ZAI_API_KEY env vars are set, directCompletion will use GLM.
+// AI client placeholder — AGENTMARK uses direct HTTP calls to provider APIs.
+// This always returns null; the actual AI calls go through directCompletion
+// and directStream which use fetch() directly.
+export async function getAIClient(): Promise<null> {
   return null;
 }
 
@@ -133,10 +107,10 @@ export async function* executeAgent(
   const started = Date.now();
   const order = topoSort(nodes, edges);
   const outputs = new Map<string, string>();
-  // getZAI() returns null if the SDK config isn't available (e.g. on Railway
-  // without ZAI_API_KEY). runCompletion/streamCompletion handle null by
+  // getunknown() returns null if the SDK config isn't available (e.g. on Railway
+  // without unknown_API_KEY). runCompletion/streamCompletion handle null by
   // falling back to the free API via directCompletion/directStream.
-  const zai = await getZAI();
+  const aiClient = await getunknown();
 
   // upstream outputs for a node
   const upstream = (id: string) =>
@@ -220,11 +194,11 @@ export async function* executeAgent(
         }
       } else if (data.kind === "tool" && data.tool === "web-search") {
         const query = incomingContext(node.id).slice(0, 200) || ctx.input;
-        if (!zai) {
+        if (!aiClient) {
           outputs.set(node.id, `Web search unavailable (no SDK config). Query was: "${query}"`);
         } else {
         try {
-          const results = await zai.functions.invoke("web_search", { query, num: 5 });
+          const results = await aiClient.functions.invoke("web_search", { query, num: 5 });
           const formatted = results
             .map((r, i) => `${i + 1}. ${r.name}\n   ${r.snippet}\n   ${r.url}`)
             .join("\n\n");
@@ -239,11 +213,11 @@ export async function* executeAgent(
         const url = (incomingContext(node.id).match(/https?:\/\/\S+/)?.[0] || "").trim();
         if (!url) {
           outputs.set(node.id, "Page Reader: no URL found in upstream input.");
-        } else if (!zai) {
+        } else if (!aiClient) {
           outputs.set(node.id, `Page Reader unavailable (no SDK config). URL was: ${url}`);
         } else {
           try {
-            const result = await zai.functions.invoke("page_reader", { url });
+            const result = await aiClient.functions.invoke("page_reader", { url });
             const title = result?.data?.title ?? "";
             const html = result?.data?.html ?? "";
             // Strip HTML tags for a plain-text snapshot (compact)
@@ -304,11 +278,11 @@ export async function* executeAgent(
         }
       } else if (data.kind === "tool" && data.tool === "tts") {
         const text = incomingContext(node.id).slice(0, 1000) || ctx.input;
-        if (!zai) {
+        if (!aiClient) {
           outputs.set(node.id, "[TTS unavailable — no SDK config]");
         } else {
         try {
-          const res = await zai.audio.tts.create({
+          const res = await aiClient.audio.tts.create({
             input: text,
             voice: data.ttsVoice ?? "default",
           });
@@ -332,18 +306,18 @@ export async function* executeAgent(
         }
       } else if (data.kind === "tool") {
         const sys = TOOL_PROMPTS[data.tool ?? "summarize"] ?? TOOL_PROMPTS.summarize;
-        const out = await runCompletion(zai, sys, incomingContext(node.id), data.provider, ctx.history, data);
+        const out = await runCompletion(aiClient, sys, incomingContext(node.id), data.provider, ctx.history, data);
         outputs.set(node.id, out);
         totalTokens += Math.ceil(out.length / 4);
       } else if (data.kind === "image-gen") {
         // Generate an image from the upstream prompt.
         const prompt = incomingContext(node.id).slice(0, 1000) || ctx.input;
         yield { type: "trace", node: node.id, label, status: "streaming" };
-        if (!zai) {
+        if (!aiClient) {
           outputs.set(node.id, "[Image generation unavailable — no SDK config]");
         } else {
         try {
-          const res = await zai.images.generations.create({
+          const res = await aiClient.images.generations.create({
             prompt,
             size: data.imageSize ?? "1024x1024",
           });
@@ -367,20 +341,20 @@ export async function* executeAgent(
         const imageUrl = data.imageUrl;
         if (!imageUrl) {
           outputs.set(node.id, "[vision: no image attached]");
-        } else if (!zai) {
+        } else if (!aiClient) {
           outputs.set(node.id, "[vision unavailable — no SDK config]");
         } else {
           if (node.id === terminalGenId) {
             yield { type: "trace", node: node.id, label, status: "streaming" };
             let full = "";
-            for await (const chunk of streamVision(zai, prompt, imageUrl, ctx.history)) {
+            for await (const chunk of streamVision(aiClient, prompt, imageUrl, ctx.history)) {
               full += chunk;
               yield { type: "delta", content: chunk };
             }
             outputs.set(node.id, full);
             totalTokens += Math.ceil(full.length / 4);
           } else {
-            const out = await runVision(zai, prompt, imageUrl, ctx.history);
+            const out = await runVision(aiClient, prompt, imageUrl, ctx.history);
             outputs.set(node.id, out);
             totalTokens += Math.ceil(out.length / 4);
           }
@@ -644,7 +618,7 @@ export async function* executeAgent(
           // Track input tokens for the primary generation call.
           inputTokens += estimateInput(sys, context);
           let full = "";
-          for await (const chunk of streamCompletion(zai, sys, context, data.provider, ctx.history, data)) {
+          for await (const chunk of streamCompletion(aiClient, sys, context, data.provider, ctx.history, data)) {
             full += chunk;
             yield { type: "delta", content: chunk };
           }
@@ -654,7 +628,7 @@ export async function* executeAgent(
           outputTokens += out;
         } else {
           inputTokens += estimateInput(sys, context);
-          const out = await runCompletion(zai, sys, context, data.provider, ctx.history, data);
+          const out = await runCompletion(aiClient, sys, context, data.provider, ctx.history, data);
           outputs.set(node.id, out);
           const outTok = Math.ceil(out.length / 4);
           totalTokens += outTok;
@@ -711,7 +685,7 @@ export async function* executeAgent(
 }
 
 async function runCompletion(
-  zai: ZAI | null,
+  aiClient: unknown | null,
   system: string,
   user: string,
   model: WorkflowNodeData["provider"],
@@ -724,9 +698,9 @@ async function runCompletion(
     { role: "user" as const, content: user || "(empty input)" },
   ];
   // Try the SDK first; fall back to direct HTTP if it fails or isn't available
-  if (zai) {
+  if (aiClient) {
     try {
-      const res = await zai.chat.completions.create({
+      const res = await aiClient.chat.completions.create({
         model: model ?? "glm-4.5-air",
         messages,
         thinking: { type: "disabled" },
@@ -742,7 +716,7 @@ async function runCompletion(
 /**
  * AGENTMARK model routing:
  * - free-* models → free API (no key needed, default)
- * - glm-* models → GLM API (needs ZAI_BASE_URL + ZAI_API_KEY env vars)
+ * - glm-* models → GLM API (needs unknown_BASE_URL + unknown_API_KEY env vars)
  * - custom → user-provided customApiUrl + customApiKey + customModelName
  */
 
@@ -769,8 +743,8 @@ function resolveModel(provider: WorkflowNodeData["provider"] | undefined) {
     return {
       type: "glm" as const,
       apiModel: p,
-      apiUrl: process.env.ZAI_BASE_URL || "",
-      apiKey: process.env.ZAI_API_KEY || "",
+      apiUrl: process.env.unknown_BASE_URL || "",
+      apiKey: process.env.unknown_API_KEY || "",
     };
   }
   return {
@@ -872,7 +846,7 @@ async function directCompletion(
 }
 
 async function* streamCompletion(
-  zai: ZAI | null,
+  aiClient: unknown | null,
   system: string,
   user: string,
   model: WorkflowNodeData["provider"],
@@ -885,9 +859,9 @@ async function* streamCompletion(
     { role: "user" as const, content: user || "(empty input)" },
   ];
   // Try the SDK streaming first; fall back to direct HTTP streaming
-  if (zai) {
+  if (aiClient) {
     try {
-      const body = await zai.chat.completions.create({
+      const body = await aiClient.chat.completions.create({
         model: model ?? "glm-4.5-air",
         messages,
         stream: true,
@@ -1038,12 +1012,12 @@ async function* readSSEStream(body: ReadableStream<Uint8Array>): AsyncGenerator<
 }
 
 async function runVision(
-  zai: ZAI,
+  aiClient: unknown,
   prompt: string,
   imageUrl: string,
   history: { role: "user" | "assistant"; content: string }[],
 ): Promise<string> {
-  const res = await zai.chat.completions.createVision({
+  const res = await aiClient.chat.completions.createVision({
     model: "glm-4.5v",
     messages: [
       { role: "system", content: "You analyse images precisely and concisely." },
@@ -1062,12 +1036,12 @@ async function runVision(
 }
 
 async function* streamVision(
-  zai: ZAI,
+  aiClient: unknown,
   prompt: string,
   imageUrl: string,
   history: { role: "user" | "assistant"; content: string }[],
 ): AsyncGenerator<string> {
-  const body = await zai.chat.completions.createVision({
+  const body = await aiClient.chat.completions.createVision({
     model: "glm-4.5v",
     messages: [
       { role: "system", content: "You analyse images precisely and concisely." },

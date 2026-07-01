@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
   Sparkles, ChevronRight, X, Plug, Settings, MessagesSquare, BarChart3, Crown,
-  KeyRound, Users, Clock, GitBranch, Store, ShieldCheck, Wand2, Bug, Activity, Zap, Brain, Bell, Webhook, GitFork, BookMarked, Terminal, GitCompare,
+  KeyRound, Users, Clock, GitBranch, Store, ShieldCheck, Wand2, Bug, Activity, Zap, Brain, Bell, Webhook, GitFork, BookMarked, Terminal, GitCompare, Cpu,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -39,6 +39,7 @@ const NAV: { id: StudioView; label: string; icon: typeof LayoutDashboard; desc: 
   { id: "playground", label: "API Playground", icon: Terminal, desc: "Test REST API" },
   { id: "webhook-tester", label: "Webhook Tester", icon: Webhook, desc: "Send test webhooks" },
   { id: "comparison", label: "Compare Agents", icon: GitCompare, desc: "Side-by-side stats" },
+  { id: "local-models", label: "Local Models", icon: Cpu, desc: "Free AI models" },
 ];
 
 export function Sidebar() {

@@ -63,7 +63,7 @@ Before clicking **Deploy**, expand **Environment Variables** and add each one fr
 - `PAYSTACK_SECRET_KEY`, `PAYSTACK_PLAN_PRO`, `PAYSTACK_PLAN_TEAM` — for billing
 - `SCHEDULER_API_KEY` — random string to protect the cron endpoint
 - `EMAIL_POLL_API_KEY` — random string to protect the email poller
-- `ZAI_API_KEY`, `ZAI_BASE_URL` — for GLM-4.6 model access
+- `AI_API_KEY`, `AI_BASE_URL` — for GLM-4.6 model access
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` — for voice/SMS
 - `WHATSAPP_VERIFY_TOKEN`, `SLACK_SIGNING_SECRET` — for those platforms
 
