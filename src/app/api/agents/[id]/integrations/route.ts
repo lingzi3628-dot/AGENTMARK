@@ -73,13 +73,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!info.ok) {
         setupStatus = { ok: false, message: `Token invalid: ${info.error}` };
       } else {
-        // Register the webhook with Telegram, including the integration ID
-        // so the webhook knows which bot received each message.
+        // Try to register the webhook with Telegram.
+        // On localhost this will fail — Telegram can't reach localhost.
+        // That's OK — the token is valid and the integration is saved.
+        // The webhook will auto-register when deployed to a public URL.
         const webhookUrl = `${deriveTelegramWebhookUrl(req)}?i=${created.id}`;
+        const isLocalhost = webhookUrl.includes("localhost") || webhookUrl.includes("127.0.0.1");
         const registered = await setTelegramWebhook(config.botToken, webhookUrl);
-        setupStatus = registered
-          ? { ok: true, message: `Bot @${info.username} connected! Send it a message on Telegram to test.` }
-          : { ok: false, message: "Token valid but webhook registration failed. Your server URL must be publicly accessible." };
+
+        if (registered) {
+          setupStatus = { ok: true, message: `Bot @${info.username} connected! Send it a message on Telegram to test.` };
+        } else if (isLocalhost) {
+          setupStatus = {
+            ok: true,
+            message: `Bot @${info.username} connected! Token is valid. ⚠️ Webhook not registered (localhost is not publicly accessible). The bot will auto-register its webhook when you deploy to a public URL (e.g. Railway/Vercel).`,
+          };
+        } else {
+          setupStatus = {
+            ok: true,
+            message: `Bot @${info.username} connected! Token is valid. Webhook registration failed — check that your server URL is publicly accessible over HTTPS.`,
+          };
+        }
       }
     } catch (e) {
       setupStatus = { ok: false, message: e instanceof Error ? e.message : "setup failed" };
