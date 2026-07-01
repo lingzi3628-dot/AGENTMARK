@@ -29,6 +29,7 @@ AGENTMARK is a full-stack, AI-native automation platform that lets you design mu
 | Mobile PWA (offline + installable) | ✅ | ❌ | ❌ |
 | Paystack billing (African market) | ✅ | ❌ | ❌ |
 | Self-host or cloud | ✅ | ✅ | Cloud only |
+| 100% Free + Open Source | ✅ | Partial | ❌ |
 
 ---
 
@@ -81,11 +82,11 @@ AGENTMARK is a full-stack, AI-native automation platform that lets you design mu
 - **Team invite links** — no email required
 - **Real-time presence** — see who's viewing/editing the same agent
 
-### 💳 Billing (Paystack)
-- **3 tiers**: Free ($0, 2 agents), Pro ($19/mo, 25 agents), Team ($79/mo, 100 agents)
-- **Paystack integration** — supports NGN, GHS, ZAR, KES, USD
-- **Coming Soon state** — billing shows "Coming Soon" with email signup until you set `PAYSTACK_SECRET_KEY`
-- **Plan-based limits** — agents, integrations, schedules, webhook triggers, daily tokens, daily spend
+### 💳 Free & Open Source
+- **100% free** — no paid plans, no billing, no credit card required
+- **MIT License** — use it, fork it, self-host it, modify it
+- **2 agents, 100K tokens/day, all features included**
+- **Local model support** — run 100% free with Ollama/LM Studio (no API costs)
 
 ### 🌐 Platform
 - **Public REST API** + JS SDK — build on AGENTMARK programmatically

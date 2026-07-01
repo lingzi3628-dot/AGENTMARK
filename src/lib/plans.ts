@@ -1,17 +1,16 @@
-// Plan definitions for AGENTMARK billing tiers.
-// Free is the default; Pro and Team are paid upgrades via Paystack Checkout.
-// Paystack supports NGN, GHS, ZAR, KES, USD — we price in USD for simplicity.
+// AGENTMARK is free and open source — no paid plans.
+// This file is kept for backwards compatibility with code that references PLANS.
 
 export interface PlanDef {
-  id: "free" | "pro" | "team";
+  id: "free";
   name: string;
-  price: string; // "$0/mo", "$19/mo", "$79/mo"
-  priceUsd: number; // 0, 19, 79 — used for Paystack checkout amount
-  maxAgents: number; // 2, 25, 100
-  maxIntegrationsPerAgent: number; // 2, 25, 100
-  dailyTokenLimit: number; // 100000, 500000, 2000000
-  maxWebhookTriggersPerAgent: number; // 2, 25, 100
-  maxSchedulesPerAgent: number; // 2, 25, 100
+  price: string;
+  priceUsd: number;
+  maxAgents: number;
+  maxIntegrationsPerAgent: number;
+  maxWebhookTriggersPerAgent: number;
+  maxSchedulesPerAgent: number;
+  dailyTokenLimit: number;
   features: string[];
   highlighted?: boolean;
 }
@@ -20,7 +19,7 @@ export const PLANS: PlanDef[] = [
   {
     id: "free",
     name: "Free",
-    price: "$0/mo",
+    price: "$0/forever",
     priceUsd: 0,
     maxAgents: 2,
     maxIntegrationsPerAgent: 2,
@@ -29,66 +28,27 @@ export const PLANS: PlanDef[] = [
     dailyTokenLimit: 100000,
     features: [
       "2 agents",
-      "2 integrations per agent",
       "100K tokens/day",
       "All node types",
-      "Community support",
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "$19/mo",
-    priceUsd: 19,
-    maxAgents: 25,
-    maxIntegrationsPerAgent: 25,
-    maxWebhookTriggersPerAgent: 25,
-    maxSchedulesPerAgent: 25,
-    dailyTokenLimit: 500000,
-    features: [
-      "25 agents",
-      "Unlimited integrations",
-      "500K tokens/day",
-      "All node types",
-      "Priority support",
-      "Custom API keys",
-    ],
-    highlighted: true,
-  },
-  {
-    id: "team",
-    name: "Team",
-    price: "$79/mo",
-    priceUsd: 79,
-    maxAgents: 100,
-    maxIntegrationsPerAgent: 100,
-    maxWebhookTriggersPerAgent: 100,
-    maxSchedulesPerAgent: 100,
-    dailyTokenLimit: 2000000,
-    features: [
-      "100 agents",
-      "Unlimited integrations",
-      "2M tokens/day",
-      "All features",
-      "SSO + audit log",
-      "Dedicated support",
+      "All integrations",
+      "Local model support",
+      "Open source (MIT)",
     ],
   },
 ];
 
-// Map plan id → plan definition.
-export function getPlan(planId: string): PlanDef {
-  return PLANS.find((p) => p.id === planId) || PLANS[0];
+export function getPlan(_planId: string): PlanDef {
+  return PLANS[0]; // always free
 }
 
-// Get the configured Paystack plan code for a plan id ("pro" → PAYSTACK_PLAN_PRO env).
-// Paystack plans are created in the dashboard and have codes like "PLN_xxxxx".
-export function priceIdForPlan(planId: "pro" | "team"): string | null {
-  const envVar = planId === "pro" ? "PAYSTACK_PLAN_PRO" : "PAYSTACK_PLAN_TEAM";
-  return process.env[envVar] || null;
+export function priceIdForPlan(_planId: string): string | null {
+  return null; // no paid plans
 }
 
-// Whether Paystack billing is enabled (server-side env check).
 export function billingEnabled(): boolean {
-  return !!process.env.PAYSTACK_SECRET_KEY;
+  return false; // always free
+}
+
+export function spendLimitForPlan(_planId: string): number {
+  return 100; // $1.00 daily spend limit (in cents) — for cost tracking display
 }
