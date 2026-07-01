@@ -1,12 +1,14 @@
 {
-  "name": "AGENTMARK",
+  "name": "AGENTMARK — AI Agent Studio",
   "short_name": "AGENTMARK",
-  "description": "Build, run & ship AI agents on a visual canvas.",
+  "description": "Build, run & ship AI agents on a visual canvas. Schedule, integrate, and monetize.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f1419",
   "theme_color": "#34d399",
   "orientation": "any",
+  "categories": ["productivity", "business", "developer"],
+  "screenshots": [],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -19,6 +21,32 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Home",
+      "url": "/?view=dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "New Agent",
+      "short_name": "New",
+      "url": "/?view=studio",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Approvals",
+      "short_name": "Approve",
+      "url": "/?view=approvals",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Analytics",
+      "short_name": "Stats",
+      "url": "/?view=analytics",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

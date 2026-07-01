@@ -36,6 +36,7 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   billing: { title: "Billing", sub: "Plans, pricing, and your subscription" },
   teams: { title: "Teams", sub: "Shared workspaces & members" },
   "api-keys": { title: "API Keys", sub: "Programmatic access for developers" },
+  connectors: { title: "Connectors", sub: "OAuth integrations with Google, GitHub, Slack, and more" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 

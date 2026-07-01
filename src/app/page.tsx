@@ -26,6 +26,8 @@ import { ApprovalsView } from "@/components/studio/views/approvals-view";
 import { OptimizeView } from "@/components/studio/views/optimize-view";
 import { DebugView } from "@/components/studio/views/debug-view";
 import { NodeMetricsView } from "@/components/studio/views/node-metrics-view";
+import { ConnectorsView } from "@/components/studio/views/connectors-view";
+import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
@@ -107,11 +109,13 @@ export default function Home() {
               {view === "optimize" && <OptimizeView />}
               {view === "debug" && <DebugView />}
               {view === "node-metrics" && <NodeMetricsView />}
+              {view === "connectors" && <ConnectorsView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />
           </div>
           <OnboardingTour />
+          <PresenceOverlay />
         </div>
       )}
     </AuthProvider>

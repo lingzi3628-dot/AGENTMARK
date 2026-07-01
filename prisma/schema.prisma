@@ -464,3 +464,31 @@ model Approval {
   @@index([agentId, status])
   @@index([runId])
 }
+
+// OAuth connectors — one-click connect to Google, GitHub, Slack, Notion, etc.
+// Tokens are encrypted at rest with AES-256-GCM (src/lib/crypto.ts).
+model OAuthToken {
+  id          String   @id @default(cuid())
+  userId      String
+  // Provider key: "google" | "github" | "slack" | "notion" | "microsoft" | "discord" | "linear" | "asana"
+  provider    String
+  // Encrypted access token (AES-256-GCM)
+  encryptedAccessToken String
+  // Encrypted refresh token (if provider supports it)
+  encryptedRefreshToken String @default("")
+  // Token expiration (if known)
+  expiresAt   DateTime?
+  // Scopes granted by the user
+  scopes      String   @default("")
+  // Provider-specific user info (e.g. email, name, avatar)
+  providerUserId   String @default("")
+  providerEmail    String @default("")
+  providerUserName String @default("")
+  providerAvatar   String @default("")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+}

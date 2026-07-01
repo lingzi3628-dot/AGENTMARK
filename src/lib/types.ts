@@ -230,6 +230,8 @@ export type StudioView =
   | "api-keys"
   | "teams"
   | "history"
+  | "marketplace"
+  | "connectors"
   | "settings";
 
 export interface TemplateShare {
