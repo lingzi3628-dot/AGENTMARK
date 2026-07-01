@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Enable version updates for npm/bun dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "lingzi3628-dot"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+    # Security updates are always enabled regardless of schedule
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "lingzi3628-dot"
+    labels:
+      - "dependencies"
+      - "github-actions"

@@ -1,0 +1,19 @@
+# CODEOWNERS — Only the repository owner can approve pull requests.
+# This ensures no one can merge changes without explicit approval.
+# Forks can make changes, but they must be reviewed by the owner before merging.
+
+* @lingzi3628-dot
+
+# Admin panel — extra protection
+/src/app/admin/          @lingzi3628-dot
+/src/lib/admin-auth.ts   @lingzi3628-dot
+/src/app/api/admin/      @lingzi3628-dot
+
+# SDK source — private, do not modify without owner approval
+/src/lib/sdk-source.ts   @lingzi3628-dot
+/src/app/api/sdk/        @lingzi3628-dot
+
+# Security-critical files
+/src/lib/crypto.ts       @lingzi3628-dot
+/src/lib/api-auth.ts     @lingzi3628-dot
+/src/lib/rate-limit.ts   @lingzi3628-dot
