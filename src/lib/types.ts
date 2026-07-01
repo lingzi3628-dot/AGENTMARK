@@ -38,7 +38,18 @@ export type ToolType =
   | "translate"
   | "code"
   | "classify"
-  | "tts";
+  | "tts"
+  // 10 new local tools (no external API needed)
+  | "text-extract"      // Extract emails, URLs, phone numbers, dates from text
+  | "json-transform"    // Transform JSON: filter, map, reduce, pick fields
+  | "regex-match"       // Run regex patterns on input
+  | "markdown-convert"  // Convert text↔HTML↔Markdown
+  | "hash-generate"     // Generate MD5, SHA-256, SHA-512 hashes
+  | "base64-codec"      // Encode/decode Base64
+  | "url-codec"         // Encode/decode URLs
+  | "diff-text"         // Compare two texts and show differences
+  | "csv-parser"        // Parse CSV → JSON and vice versa
+  | "uuid-generate";    // Generate UUIDs v4 and v7
 
 export interface WorkflowNodeData {
   label: string;
@@ -75,6 +86,19 @@ export interface WorkflowNodeData {
   code?: string;
   // code node — execution timeout in ms (default 5000, max 30000)
   codeTimeout?: number;
+  // local tool config fields
+  extractType?: string;     // text-extract: all|emails|urls|phones|dates|ips
+  operation?: string;       // json-transform, regex-match, base64-codec, url-codec, csv-parser
+  field?: string;           // json-transform: field to pick/filter/sort
+  value?: string;           // json-transform: filter value, regex replace value
+  pattern?: string;         // regex-match: pattern
+  flags?: string;           // regex-match: flags (default g)
+  direction?: string;       // markdown-convert: md-to-html|html-to-md|text-to-md
+  algorithm?: string;       // hash-generate: md5|sha1|sha256|sha512
+  compareWith?: string;     // diff-text: text to compare against
+  delimiter?: string;       // csv-parser: delimiter (default ,)
+  version?: string;         // uuid-generate: v4|v7
+  count?: string;           // uuid-generate: number of UUIDs (default 1)
   // knowledge node — RAG (semantic search over uploaded Documents)
   useRAG?: boolean;
   ragTopK?: number; // 1-10, default 4

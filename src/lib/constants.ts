@@ -103,6 +103,17 @@ export const TOOLS: ToolDef[] = [
   { id: "code", name: "Code Generator", description: "Generate, explain, and refactor code.", icon: "code" },
   { id: "classify", name: "Classifier", description: "Categorize inputs into defined labels.", icon: "tags" },
   { id: "tts", name: "Text to Speech", description: "Convert text into natural-sounding audio.", icon: "volume-2" },
+  // 10 new local tools — no external API needed, run entirely server-side
+  { id: "text-extract", name: "Text Extractor", description: "Extract emails, URLs, phone numbers, dates from text.", icon: "search" },
+  { id: "json-transform", name: "JSON Transform", description: "Filter, map, pick fields from JSON data.", icon: "braces" },
+  { id: "regex-match", name: "Regex Match", description: "Run regex patterns on input, extract matches.", icon: "regex" },
+  { id: "markdown-convert", name: "Markdown Converter", description: "Convert between text, HTML, and Markdown.", icon: "file-code" },
+  { id: "hash-generate", name: "Hash Generator", description: "Generate MD5, SHA-256, SHA-512 hashes.", icon: "hash" },
+  { id: "base64-codec", name: "Base64 Codec", description: "Encode or decode Base64 strings.", icon: "binary" },
+  { id: "url-codec", name: "URL Codec", description: "Encode or decode URL strings.", icon: "link-2" },
+  { id: "diff-text", name: "Text Diff", description: "Compare two texts and show line-by-line differences.", icon: "git-compare" },
+  { id: "csv-parser", name: "CSV Parser", description: "Parse CSV to JSON or JSON to CSV.", icon: "table" },
+  { id: "uuid-generate", name: "UUID Generator", description: "Generate UUIDs (v4 and v7).", icon: "fingerprint" },
 ];
 
 export const NODE_PALETTE = [

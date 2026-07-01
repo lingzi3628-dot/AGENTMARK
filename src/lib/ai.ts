@@ -17,6 +17,13 @@ export async function getAIClient(): Promise<null> {
   return null;
 }
 
+// Local tool types — these run server-side with no external API
+const LOCAL_TOOL_TYPES = new Set([
+  "text-extract", "json-transform", "regex-match", "markdown-convert",
+  "hash-generate", "base64-codec", "url-codec", "diff-text",
+  "csv-parser", "uuid-generate",
+]);
+
 // In-process memory store (persists across runs within the server lifetime).
 const memoryStore = new Map<string, string>();
 
@@ -303,6 +310,34 @@ export async function* executeAgent(
           const msg = err instanceof Error ? err.message : "tts failed";
           outputs.set(node.id, `[TTS error: ${msg}]`);
         }
+        }
+      } else if (data.kind === "tool" && LOCAL_TOOL_TYPES.has(data.tool ?? "")) {
+        // 10 new local tools — run entirely server-side, no external API needed
+        const toolInput = incomingContext(node.id);
+        const { executeLocalTool } = await import("./local-tools");
+        const config: Record<string, string> = {};
+        // Pass node data fields as config
+        if (data.extractType) config.extractType = data.extractType;
+        if (data.operation) config.operation = data.operation;
+        if (data.field) config.field = data.field;
+        if (data.value) config.value = data.value;
+        if (data.pattern) config.pattern = data.pattern;
+        if (data.flags) config.flags = data.flags;
+        if (data.direction) config.direction = data.direction;
+        if (data.algorithm) config.algorithm = data.algorithm;
+        if (data.compareWith) config.compareWith = data.compareWith;
+        if (data.delimiter) config.delimiter = data.delimiter;
+        if (data.version) config.version = data.version;
+        if (data.count) config.count = String(data.count);
+        const result = executeLocalTool(data.tool!, toolInput, config);
+        if (result.ok) {
+          outputs.set(node.id, result.output);
+          totalTokens += Math.ceil(result.output.length / 4);
+        } else {
+          outputs.set(node.id, `[tool error: ${result.error}]`);
+          yield { type: "trace", node: node.id, label, status: "error" };
+          yield { type: "error", node: node.id, message: `Tool "${label}" failed: ${result.error}` };
+          return;
         }
       } else if (data.kind === "tool") {
         const sys = TOOL_PROMPTS[data.tool ?? "summarize"] ?? TOOL_PROMPTS.summarize;
