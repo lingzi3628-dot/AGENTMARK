@@ -191,7 +191,7 @@ export function MarketplaceView() {
   // When a template is selected, reset local rating state
   useEffect(() => {
     if (selected) setUserRating(0);
-  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
 
   const showPublishCta = agents.length > 0;
 

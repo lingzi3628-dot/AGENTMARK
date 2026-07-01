@@ -1,6 +1,11 @@
 // Lightweight i18n: loads translations client-side, stores preference in localStorage.
 // Full next-intl middleware setup is intentionally avoided to keep the build simple.
 
+import en from "../messages/en.json";
+import zh from "../messages/zh.json";
+import es from "../messages/es.json";
+import fr from "../messages/fr.json";
+
 export const LOCALES = ["en", "zh", "es", "fr"] as const;
 export type Locale = (typeof LOCALES)[number];
 
@@ -20,19 +25,15 @@ export const LOCALE_FLAGS: Record<Locale, string> = {
 
 type Messages = Record<string, Record<string, string>>;
 
-const messageCache: Partial<Record<Locale, Messages>> = {};
+const MESSAGES: Record<Locale, Messages> = {
+  en: en as Messages,
+  zh: zh as Messages,
+  es: es as Messages,
+  fr: fr as Messages,
+};
 
-export async function loadMessages(locale: Locale): Promise<Messages> {
-  if (messageCache[locale]) return messageCache[locale]!;
-  try {
-    const mod = await import(`./messages/${locale}.json`);
-    messageCache[locale] = mod.default as Messages;
-    return mod.default as Messages;
-  } catch {
-    // Fallback to English
-    if (locale !== "en") return loadMessages("en");
-    return {};
-  }
+export function loadMessages(locale: Locale): Messages {
+  return MESSAGES[locale] || MESSAGES.en;
 }
 
 export function getStoredLocale(): Locale {
