@@ -27,6 +27,8 @@ import { OptimizeView } from "@/components/studio/views/optimize-view";
 import { DebugView } from "@/components/studio/views/debug-view";
 import { NodeMetricsView } from "@/components/studio/views/node-metrics-view";
 import { ConnectorsView } from "@/components/studio/views/connectors-view";
+import { InsightsView } from "@/components/studio/views/insights-view";
+import { NotificationsView } from "@/components/studio/views/notifications-view";
 import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
@@ -110,6 +112,8 @@ export default function Home() {
               {view === "debug" && <DebugView />}
               {view === "node-metrics" && <NodeMetricsView />}
               {view === "connectors" && <ConnectorsView />}
+              {view === "insights" && <InsightsView />}
+              {view === "notifications" && <NotificationsView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

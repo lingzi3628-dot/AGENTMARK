@@ -232,6 +232,8 @@ export type StudioView =
   | "history"
   | "marketplace"
   | "connectors"
+  | "insights"
+  | "notifications"
   | "settings";
 
 export interface TemplateShare {

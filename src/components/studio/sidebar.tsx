@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Workflow, Play, LayoutTemplate, Database, Rocket,
   Sparkles, ChevronRight, X, Plug, Settings, MessagesSquare, BarChart3, Crown,
-  KeyRound, Users, Clock, GitBranch, Store, ShieldCheck, Wand2, Bug, Activity, Zap,
+  KeyRound, Users, Clock, GitBranch, Store, ShieldCheck, Wand2, Bug, Activity, Zap, Brain, Bell,
 } from "lucide-react";
 import type { StudioView } from "@/lib/types";
 
@@ -31,6 +31,8 @@ const NAV: { id: StudioView; label: string; icon: typeof LayoutDashboard; desc: 
   { id: "teams", label: "Teams", icon: Users, desc: "Shared workspaces" },
   { id: "api-keys", label: "API Keys", icon: KeyRound, desc: "Developer access" },
   { id: "connectors", label: "Connectors", icon: Zap, desc: "OAuth integrations" },
+  { id: "insights", label: "Insights", icon: Brain, desc: "AI performance analysis" },
+  { id: "notifications", label: "Notifications", icon: Bell, desc: "Email alerts" },
 ];
 
 export function Sidebar() {
