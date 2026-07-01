@@ -269,6 +269,7 @@ export type StudioView =
   | "webhook-tester"
   | "comparison"
   | "local-models"
+  | "sdk-register"
   | "settings";
 
 export interface TemplateShare {

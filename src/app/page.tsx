@@ -36,6 +36,7 @@ import { ApiPlaygroundView } from "@/components/studio/views/api-playground-view
 import { WebhookTesterView } from "@/components/studio/views/webhook-tester-view";
 import { AgentComparisonView } from "@/components/studio/views/agent-comparison-view";
 import { LocalModelsView } from "@/components/studio/views/local-models-view";
+import { SdkRegistrationView } from "@/components/studio/views/sdk-registration-view";
 import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { TermsAcceptance } from "@/components/studio/terms-acceptance";
@@ -150,6 +151,7 @@ export default function Home() {
               {view === "webhook-tester" && <WebhookTesterView />}
               {view === "comparison" && <AgentComparisonView />}
               {view === "local-models" && <LocalModelsView />}
+              {view === "sdk-register" && <SdkRegistrationView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

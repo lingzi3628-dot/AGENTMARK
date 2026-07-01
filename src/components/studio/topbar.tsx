@@ -46,6 +46,7 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   "webhook-tester": { title: "Webhook Tester", sub: "Send test requests to any webhook" },
   comparison: { title: "Compare Agents", sub: "Side-by-side agent statistics" },
   "local-models": { title: "Local Models", sub: "Connect to free, private, offline AI models" },
+  "sdk-register": { title: "Get the SDK", sub: "Register for your free API key + SDK download" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 
