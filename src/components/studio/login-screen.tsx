@@ -72,6 +72,9 @@ export function LoginScreen() {
             <p className="mt-1 text-sm text-muted-foreground">
               Build, run & ship AI agents on a visual canvas
             </p>
+            <p className="mt-2 text-[11px] text-muted-foreground/70">
+              Built by <span className="font-medium text-primary">Spyro Technology</span> × AGENTMARK
+            </p>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Sparkles, Cpu } from "lucide-react";
 
 export function StudioFooter() {
   return (
@@ -12,6 +12,20 @@ export function StudioFooter() {
         </div>
         <div className="flex items-center gap-3">
           <span>Powered by AGENTMARK Free • 100K tokens/day</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span>Built by</span>
+          <a
+            href="https://spyro.tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 font-medium text-primary hover:underline"
+          >
+            <Cpu className="h-3 w-3" />
+            Spyro Technology
+          </a>
+          <span>×</span>
+          <span className="font-medium">AGENTMARK</span>
         </div>
       </div>
     </footer>

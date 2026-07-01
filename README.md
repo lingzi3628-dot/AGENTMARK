@@ -2,6 +2,8 @@
 
 ### Build, Run & Ship AI Agents on a Visual Canvas
 
+> **Built by [Spyro Technology](https://spyro.tech) × AGENTMARK**
+
 [![CI](https://github.com/lingzi3628-dot/AGENTMARK/actions/workflows/ci.yml/badge.svg)](https://github.com/lingzi3628-dot/AGENTMARK/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
@@ -320,6 +322,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 ---
 
 ## 🙏 Acknowledgments
+
+**Built by [Spyro Technology](https://spyro.tech) × AGENTMARK**
 
 - [Next.js](https://nextjs.org) — React framework
 - [shadcn/ui](https://ui.shadcn.com) — UI components

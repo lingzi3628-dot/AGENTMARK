@@ -16,11 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   KeyRound, Database, BarChart3, Crown, LogOut, Loader2, Check, Save,
   Cpu, Zap, AlertTriangle, Trash2, Plus, Shield, Eye, EyeOff, Plug, DollarSign,
-  CreditCard, ExternalLink, Store,
+  CreditCard, ExternalLink, Store, BarChart2,
 } from "lucide-react";
+import { isAnalyticsEnabled, setAnalyticsEnabled, getInstanceId } from "@/lib/analytics";
 import { signOut } from "@/lib/firebase";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -595,6 +597,9 @@ export function SettingsView() {
         {/* Stripe Connect — for marketplace sellers */}
         <StripeConnectSection uid={user.firebaseUid} />
 
+        {/* Analytics Consent — opt-in to anonymous usage analytics */}
+        <AnalyticsConsentSection />
+
         {/* Save button */}
         <div className="flex gap-2">
           <Button onClick={saveKeys} disabled={saving} className="gap-1.5">
@@ -799,6 +804,73 @@ function StripeConnectSection({ uid }: { uid: string }) {
           Connect Stripe Account
         </Button>
       )}
+    </Card>
+  );
+}
+
+function AnalyticsConsentSection() {
+  // Lazy init: read from localStorage on first client render (avoids set-state-in-effect)
+  const [enabled, setEnabled] = useState(() =>
+    typeof window === "undefined" ? false : isAnalyticsEnabled(),
+  );
+  const [instanceId, setInstanceId] = useState(() =>
+    typeof window === "undefined" ? "" : getInstanceId(),
+  );
+
+  function toggle() {
+    const newValue = !enabled;
+    setEnabled(newValue);
+    setAnalyticsEnabled(newValue);
+    toast.success(newValue ? "Analytics enabled — thank you!" : "Analytics disabled");
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <BarChart2 className="h-5 w-5 text-primary" />
+        <h3 className="font-semibold">Anonymous Analytics</h3>
+        {enabled && (
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px]">
+            Enabled
+          </Badge>
+        )}
+      </div>
+
+      <p className="mb-4 flex items-start gap-1.5 text-xs text-muted-foreground">
+        <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+        <span>
+          Help improve AGENTMARK by sending <strong>anonymous</strong> usage data
+          (app starts, agent count, feature usage). No API keys, no agent content,
+          no personal info — just an anonymous instance ID. <strong>Opt-in only.</strong>
+        </span>
+      </p>
+
+      <div className="space-y-3">
+        <div className="rounded-md border border-border bg-muted/20 p-3 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Instance ID</span>
+            <code className="font-mono text-[10px]">{instanceId || "—"}</code>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-muted-foreground">Data sent</span>
+            <span>App starts, agent count, run count, feature usage</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-muted-foreground">Not sent</span>
+            <span>API keys, agent content, personal info, emails</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Send anonymous analytics</p>
+            <p className="text-xs text-muted-foreground">
+              Data is sent to Spyro Technology for product improvement.
+            </p>
+          </div>
+          <Switch checked={enabled} onCheckedChange={toggle} />
+        </div>
+      </div>
     </Card>
   );
 }

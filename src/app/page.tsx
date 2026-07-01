@@ -37,6 +37,8 @@ import { WebhookTesterView } from "@/components/studio/views/webhook-tester-view
 import { AgentComparisonView } from "@/components/studio/views/agent-comparison-view";
 import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
+import { TermsAcceptance } from "@/components/studio/terms-acceptance";
+import { useState } from "react";
 import { useStudio } from "@/lib/store";
 import { useAuth } from "@/lib/auth-store";
 import type { Agent, Template, KnowledgeItem } from "@/lib/types";
@@ -44,6 +46,7 @@ import type { Agent, Template, KnowledgeItem } from "@/lib/types";
 export default function Home() {
   const { view, theme, setAgents } = useStudio();
   const { user, loading } = useAuth();
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Apply theme class to <html>
   useEffect(() => {
@@ -92,6 +95,25 @@ export default function Home() {
         </div>
       ) : !user ? (
         <LoginScreen />
+      ) : !termsAccepted ? (
+        <>
+          <TermsAcceptance onAccept={() => setTermsAccepted(true)} />
+          <div className="min-h-screen bg-background">
+            <Sidebar />
+            <div className="flex min-h-screen flex-col lg:pl-64">
+              <Topbar />
+              <main className="flex flex-1 flex-col overflow-hidden">
+                <div className="flex flex-1 items-center justify-center p-8">
+                  <div className="text-center">
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    <p className="text-sm text-muted-foreground">Please accept the Terms of Service to continue…</p>
+                  </div>
+                </div>
+              </main>
+              <StudioFooter />
+            </div>
+          </div>
+        </>
       ) : (
         <div className="min-h-screen bg-background">
           <Sidebar />

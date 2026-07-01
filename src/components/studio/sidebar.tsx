@@ -66,7 +66,7 @@ export function Sidebar() {
           </div>
           <div className="flex-1">
             <div className="text-sm font-semibold leading-tight">AGENTMARK</div>
-            <div className="text-[11px] text-muted-foreground">AI Agent Workflows</div>
+            <div className="text-[11px] text-muted-foreground">by Spyro Technology</div>
           </div>
           <button
             className="rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent lg:hidden"
