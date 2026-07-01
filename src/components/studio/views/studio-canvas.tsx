@@ -17,12 +17,13 @@ import { Icon } from "@/components/icon";
 import {
   Save, Play, Plus, Workflow, Sparkles, Loader2, PanelLeft,
   Undo2, Redo2, Copy, ClipboardPaste, Trash2,
-  Maximize2, Download, LayoutGrid, MapIcon,
+  Maximize2, Download, LayoutGrid, MapIcon, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NODE_PALETTE } from "@/lib/constants";
 import { copyNode, pasteNode, hasCopiedNode } from "@/lib/node-clipboard";
+import { AiNodeBuilderModal } from "@/components/studio/ai-node-builder-modal";
 import type { NodeKind, WorkflowNode, WorkflowNodeData, WorkflowEdge } from "@/lib/types";
 
 const nodeTypes = { agent: AgentNode };
@@ -55,6 +56,7 @@ function StudioInner() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [rfInstance, setRfInstance] = useState<import("@xyflow/react").ReactFlowInstance | null>(null);
+  const [aiNodeBuilderOpen, setAiNodeBuilderOpen] = useState(false);
   // Tracks whether there's a node in the in-memory clipboard so the Paste
   // button can enable/disable. Bumped on every copy.
   const [clipboardVersion, setClipboardVersion] = useState(0);
@@ -475,6 +477,24 @@ function StudioInner() {
           <div className="px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             Add node
           </div>
+
+          {/* AI Node Builder button */}
+          <button
+            onClick={() => setAiNodeBuilderOpen(true)}
+            className="group mb-1 flex w-full items-center gap-2.5 rounded-lg border border-primary/40 bg-primary/5 p-2.5 transition-all hover:bg-primary/10 hover:shadow-sm"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Wand2 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <div className="flex items-center gap-1 text-sm font-medium leading-tight">
+                AI Node Builder
+                <span className="rounded-full bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase text-primary">AI</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">Describe a node idea</div>
+            </div>
+          </button>
+
           {NODE_PALETTE.map((p) => (
             <div
               key={p.kind}
@@ -631,6 +651,17 @@ function StudioInner() {
           </div>
         )}
       </div>
+
+      {/* AI Node Builder Modal */}
+      <AiNodeBuilderModal
+        open={aiNodeBuilderOpen}
+        onOpenChange={setAiNodeBuilderOpen}
+        onNodeCreated={(node) => {
+          pushHistory();
+          useStudio.getState().addNode(node);
+          setSelectedNode(node.id);
+        }}
+      />
     </div>
   );
 }
