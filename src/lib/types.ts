@@ -234,6 +234,8 @@ export type StudioView =
   | "connectors"
   | "insights"
   | "notifications"
+  | "webhook-log"
+  | "dependencies"
   | "settings";
 
 export interface TemplateShare {

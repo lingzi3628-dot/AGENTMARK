@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { executeAgent } from "@/lib/ai";
 import { authenticateApiRequest, hasScope } from "@/lib/api-auth";
+import { checkRateLimit, rateLimitHeaders, RUN_RATE_LIMIT } from "@/lib/rate-limit";
 import type { WorkflowNode, WorkflowEdge } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,7 @@ interface HistoryMsg {
  * Body: { input: string, history?: HistoryMsg[] }
  * Returns: { runId, output, tokens, durationMs }
  *
- * For streaming responses, point clients at the websocket endpoint or the
- * existing SSE route at POST /api/agents/:id/run (browser EventSource).
+ * Rate limited: 20 runs per 60 seconds per API key.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +28,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   if (!hasScope(user, "agents:run")) {
     return NextResponse.json({ error: "Insufficient scope (requires agents:run)" }, { status: 403 });
+  }
+
+  // Rate limit: 20 runs per 60 seconds per API key
+  const rl = checkRateLimit(`run:${user.apiKeyId}`, RUN_RATE_LIMIT);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded", retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
+      { status: 429, headers: { ...rateLimitHeaders(rl), "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    );
   }
 
   const agent = await db.agent.findUnique({ where: { id } });
@@ -116,9 +125,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       output,
       tokens,
       durationMs,
-    });
+    }, { headers: rateLimitHeaders(rl) });
   } catch {
     // Even if persistence fails, return the result to the caller.
-    return NextResponse.json({ runId: "", output, tokens, durationMs });
+    return NextResponse.json({ runId: "", output, tokens, durationMs }, { headers: rateLimitHeaders(rl) });
   }
 }

@@ -29,6 +29,8 @@ import { NodeMetricsView } from "@/components/studio/views/node-metrics-view";
 import { ConnectorsView } from "@/components/studio/views/connectors-view";
 import { InsightsView } from "@/components/studio/views/insights-view";
 import { NotificationsView } from "@/components/studio/views/notifications-view";
+import { WebhookLogView } from "@/components/studio/views/webhook-log-view";
+import { DependenciesView } from "@/components/studio/views/dependencies-view";
 import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
@@ -114,6 +116,8 @@ export default function Home() {
               {view === "connectors" && <ConnectorsView />}
               {view === "insights" && <InsightsView />}
               {view === "notifications" && <NotificationsView />}
+              {view === "webhook-log" && <WebhookLogView />}
+              {view === "dependencies" && <DependenciesView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

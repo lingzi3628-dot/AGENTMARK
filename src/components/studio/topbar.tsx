@@ -39,6 +39,8 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   connectors: { title: "Connectors", sub: "OAuth integrations with Google, GitHub, Slack, and more" },
   insights: { title: "Insights", sub: "AI-powered performance analysis" },
   notifications: { title: "Notifications", sub: "Email alert preferences" },
+  "webhook-log": { title: "Webhook Log", sub: "All incoming + outgoing integration events" },
+  dependencies: { title: "Dependencies", sub: "Agent call graph (sub-agent relationships)" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 
