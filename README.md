@@ -43,12 +43,15 @@ AGENTMARK is a full-stack, AI-native automation platform that lets you design mu
 
 ### 🧠 AI Engine
 - **Multi-model support**: GLM-4.6/4.5/4.5-air/4.5v, OpenAI, Anthropic, Mistral, Cohere, Together, Groq, OpenRouter, DeepSeek, + any OpenAI-compatible endpoint
+- **Local model support**: Ollama, LM Studio, Jan, llama.cpp — run 100% free + private
 - **Bring Your Own Key (BYOK)** — encrypted at rest with AES-256-GCM
 - **RAG over uploaded docs** — Xenova all-MiniLM-L6-v2 embeddings, semantic retrieval
 - **Smart retries** with exponential backoff + jitter (handles 429, 5xx, timeouts)
 - **AI Agent Builder** — describe an idea in plain English, AI generates the full workflow
 - **Multi-turn refinement** — iterate on the generated workflow with chat
 - **AI Workflow Optimizer** — analyzes your workflow and suggests cost/latency/reliability improvements
+
+> 📖 **Want to use local models?** See [LOCAL_MODELS.md](./LOCAL_MODELS.md) for step-by-step setup of Ollama, LM Studio, and more.
 
 ### 🔌 Integrations
 - **9 platform integrations**: Web Widget, REST API, Facebook Messenger, WhatsApp, Telegram, Slack, Discord, Email (IMAP), SMS, Voice (Twilio)
@@ -300,6 +303,12 @@ CI runs automatically on every push and pull request via GitHub Actions.
 ## 📜 License
 
 MIT License — see [LICENSE](./LICENSE) for details.
+
+## 🤝 Contributing
+
+AGENTMARK is **open source** and free to use. Anyone can fork, self-host, and contribute via pull requests. Only the repository owner can merge to `main` to maintain quality.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ---
 

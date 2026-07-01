@@ -28,6 +28,7 @@ import { spendLimitForPlan } from "@/lib/pricing";
 import type { CustomApi } from "@/lib/types";
 
 const PROVIDER_OPTIONS = [
+  // Cloud providers
   { value: "glm", label: "GLM (Zhipu)" },
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },
@@ -39,8 +40,37 @@ const PROVIDER_OPTIONS = [
   { value: "deepseek", label: "DeepSeek" },
   { value: "fireworks", label: "Fireworks AI" },
   { value: "perplexity", label: "Perplexity" },
+  // Local model runners (OpenAI-compatible)
+  { value: "ollama", label: "🦙 Ollama (Local)" },
+  { value: "lmstudio", label: "🖥️ LM Studio (Local)" },
+  { value: "jan", label: "🤖 Jan (Local)" },
+  { value: "llamacpp", label: "🔧 llama.cpp (Local)" },
   { value: "custom", label: "Custom (OpenAI-compatible)" },
 ];
+
+// Preset base URLs for local model providers — auto-fills the baseUrl field
+const PROVIDER_PRESETS: Record<string, { baseUrl: string; defaultModel: string; note: string }> = {
+  ollama: {
+    baseUrl: "http://localhost:11434/v1",
+    defaultModel: "llama3.2",
+    note: "Install Ollama from ollama.com, then run: ollama pull llama3.2",
+  },
+  lmstudio: {
+    baseUrl: "http://localhost:1234/v1",
+    defaultModel: "loaded-model",
+    note: "Load a model in LM Studio, then enable the Local Server (port 1234)",
+  },
+  jan: {
+    baseUrl: "http://localhost:1337/v1",
+    defaultModel: "llama3.2",
+    note: "Jan app → Settings → Local API Server → Enable",
+  },
+  llamacpp: {
+    baseUrl: "http://localhost:8080/v1",
+    defaultModel: "model",
+    note: "Run: ./server -m model.gguf --port 8080",
+  },
+};
 
 export function SettingsView() {
   const { user, setUser, signOut: clearAuth } = useAuth();
@@ -160,8 +190,14 @@ export function SettingsView() {
   }
 
   async function addCustomApi() {
-    if (!newApi.label.trim() || !newApi.apiKey.trim() || !newApi.provider) {
-      toast.error("Label, provider, and API key are required");
+    const isLocal = !!PROVIDER_PRESETS[newApi.provider];
+    if (!newApi.label.trim() || !newApi.provider) {
+      toast.error("Label and provider are required");
+      return;
+    }
+    // Local providers don't need a real API key — just any placeholder
+    if (!isLocal && !newApi.apiKey.trim()) {
+      toast.error("API key is required for cloud providers");
       return;
     }
     try {
@@ -356,16 +392,35 @@ export function SettingsView() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Provider</Label>
-                  <Select value={newApi.provider} onValueChange={(v) => setNewApi((a) => ({ ...a, provider: v }))}>
+                  <Select value={newApi.provider} onValueChange={(v) => {
+                    const preset = PROVIDER_PRESETS[v];
+                    if (preset) {
+                      // Auto-fill base URL + model name for local providers
+                      setNewApi((a) => ({ ...a, provider: v, baseUrl: preset.baseUrl, modelName: preset.defaultModel, apiKey: a.apiKey || "local" }));
+                    } else {
+                      setNewApi((a) => ({ ...a, provider: v }));
+                    }
+                  }}>
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PROVIDER_OPTIONS.map((p) => (
+                      <SelectItem value="glm" disabled className="text-muted-foreground">── Cloud Providers ──</SelectItem>
+                      {PROVIDER_OPTIONS.filter((p) => !["ollama", "lmstudio", "jan", "llamacpp", "custom"].includes(p.value)).map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                      <SelectItem value="ollama" disabled className="text-muted-foreground">── Local Models (Free) ──</SelectItem>
+                      {PROVIDER_OPTIONS.filter((p) => ["ollama", "lmstudio", "jan", "llamacpp", "custom"].includes(p.value)).map((p) => (
                         <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {newApi.provider && PROVIDER_PRESETS[newApi.provider] && (
+                    <p className="flex items-start gap-1 text-[11px] text-blue-500">
+                      <span>💡</span>
+                      <span>{PROVIDER_PRESETS[newApi.provider].note}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Base URL <span className="text-muted-foreground">(optional)</span></Label>
@@ -381,11 +436,17 @@ export function SettingsView() {
                   <Input
                     value={newApi.modelName}
                     onChange={(e) => setNewApi((a) => ({ ...a, modelName: e.target.value }))}
-                    placeholder="glm-4.6, gpt-4o, claude-3-5-sonnet"
+                    placeholder="glm-4.6, gpt-4o, llama3.2"
                     className="h-9 text-sm font-mono"
                   />
                 </div>
               </div>
+              {/* For local providers, API key is not required — show a note */}
+              {newApi.provider && PROVIDER_PRESETS[newApi.provider] && (
+                <p className="text-[11px] text-emerald-500">
+                  ✅ Local model — no API key required. Just enter any value (e.g. "local").
+                </p>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-xs">API Key</Label>
                 <Input
