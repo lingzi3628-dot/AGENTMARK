@@ -9,14 +9,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let unsub = () => {};
 
     (async () => {
+      // If user already logged in via demo mode, don't try Firebase auth
+      const existingUser = useAuth.getState().user;
+      if (existingUser) {
+        useAuth.getState().setLoading(false);
+        return;
+      }
+
       const redirected = await handleRedirect().catch(() => null);
       if (redirected) await syncUser(redirected);
 
       unsub = onAuth(async (fbUser: FbUser | null) => {
         useAuth.getState().setFbUser(fbUser);
+        // Don't overwrite a demo user with null Firebase state
+        const currentUser = useAuth.getState().user;
         if (fbUser) {
           await syncUser(fbUser);
-        } else {
+        } else if (!currentUser || currentUser.firebaseUid !== "demo-user") {
           useAuth.getState().setUser(null);
         }
         useAuth.getState().setLoading(false);

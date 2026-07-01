@@ -41,6 +41,10 @@ const TITLES: Record<StudioView, { title: string; sub: string }> = {
   notifications: { title: "Notifications", sub: "Email alert preferences" },
   "webhook-log": { title: "Webhook Log", sub: "All incoming + outgoing integration events" },
   dependencies: { title: "Dependencies", sub: "Agent call graph (sub-agent relationships)" },
+  prompts: { title: "Prompt Library", sub: "Save reusable system prompts" },
+  playground: { title: "API Playground", sub: "Test the REST API interactively" },
+  "webhook-tester": { title: "Webhook Tester", sub: "Send test requests to any webhook" },
+  comparison: { title: "Compare Agents", sub: "Side-by-side agent statistics" },
   settings: { title: "Settings", sub: "Profile, API keys, and limits" },
 };
 

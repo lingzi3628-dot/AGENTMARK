@@ -31,6 +31,10 @@ import { InsightsView } from "@/components/studio/views/insights-view";
 import { NotificationsView } from "@/components/studio/views/notifications-view";
 import { WebhookLogView } from "@/components/studio/views/webhook-log-view";
 import { DependenciesView } from "@/components/studio/views/dependencies-view";
+import { PromptLibraryView } from "@/components/studio/views/prompt-library-view";
+import { ApiPlaygroundView } from "@/components/studio/views/api-playground-view";
+import { WebhookTesterView } from "@/components/studio/views/webhook-tester-view";
+import { AgentComparisonView } from "@/components/studio/views/agent-comparison-view";
 import { PresenceOverlay } from "@/components/studio/presence-overlay";
 import { OnboardingTour } from "@/components/studio/onboarding-tour";
 import { useStudio } from "@/lib/store";
@@ -118,6 +122,10 @@ export default function Home() {
               {view === "notifications" && <NotificationsView />}
               {view === "webhook-log" && <WebhookLogView />}
               {view === "dependencies" && <DependenciesView />}
+              {view === "prompts" && <PromptLibraryView />}
+              {view === "playground" && <ApiPlaygroundView />}
+              {view === "webhook-tester" && <WebhookTesterView />}
+              {view === "comparison" && <AgentComparisonView />}
               {view === "settings" && <SettingsView />}
             </main>
             <StudioFooter />

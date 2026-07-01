@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { signInWithGoogle } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-store";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Loader2, Shield } from "lucide-react";
+import { Sparkles, Loader2, Shield, UserCircle, Zap } from "lucide-react";
+import { toast } from "sonner";
 
 export function LoginScreen() {
+  const { setUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   async function handleGoogle() {
     setLoading(true);
@@ -14,6 +18,40 @@ export function LoginScreen() {
       await signInWithGoogle();
     } catch {
       setLoading(false);
+    }
+  }
+
+  async function handleDemo() {
+    setDemoLoading(true);
+    try {
+      // Create a demo user locally — no Firebase required
+      const demoUser = {
+        id: "demo-user",
+        firebaseUid: "demo-user",
+        email: "demo@agentmark.local",
+        name: "Demo User",
+        photoURL: "",
+        plan: "free",
+        dailyTokenLimit: 100000,
+        maxAgents: 2,
+        tokensUsedToday: 0,
+        tokenResetDate: new Date().toISOString().slice(0, 10),
+        glmApiKey: "",
+        openaiApiKey: "",
+        anthropicApiKey: "",
+        supabaseUrl: "",
+        supabaseAnonKey: "",
+        hasGlmKey: false,
+        hasOpenaiKey: false,
+        hasAnthropicKey: false,
+        stripeCustomerId: "",
+        stripePriceId: "",
+      };
+      setUser(demoUser);
+      toast.success("Welcome to AGENTMARK! (Demo Mode)");
+    } catch {
+      toast.error("Failed to start demo mode");
+      setDemoLoading(false);
     }
   }
 
@@ -38,14 +76,15 @@ export function LoginScreen() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card/80 p-8 backdrop-blur">
-          <h2 className="mb-1 text-lg font-semibold">Welcome back</h2>
+          <h2 className="mb-1 text-lg font-semibold">Welcome</h2>
           <p className="mb-6 text-sm text-muted-foreground">
-            Sign in to access your agents, workflows, and integrations.
+            Sign in with Google, or try the demo — no account needed.
           </p>
 
+          {/* Google Login */}
           <Button
             onClick={handleGoogle}
-            disabled={loading}
+            disabled={loading || demoLoading}
             className="w-full gap-3 h-12"
             size="lg"
           >
@@ -57,10 +96,33 @@ export function LoginScreen() {
             Continue with Google
           </Button>
 
+          {/* Divider */}
+          <div className="my-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          {/* Demo Mode */}
+          <Button
+            onClick={handleDemo}
+            disabled={loading || demoLoading}
+            variant="outline"
+            className="w-full gap-2 h-12"
+            size="lg"
+          >
+            {demoLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Zap className="h-5 w-5 text-primary" />
+            )}
+            Try Demo Mode (No Login)
+          </Button>
+
           <div className="mt-6 flex items-center gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
             <Shield className="h-4 w-4 shrink-0 text-primary" />
             <span>
-              Your Google account is used for authentication only. We store your email and name — never your password.
+              Google login is used for authentication only. Demo Mode stores data locally — perfect for trying AGENTMARK without an account.
             </span>
           </div>
         </div>

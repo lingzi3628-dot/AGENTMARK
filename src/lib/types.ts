@@ -236,6 +236,10 @@ export type StudioView =
   | "notifications"
   | "webhook-log"
   | "dependencies"
+  | "prompts"
+  | "playground"
+  | "webhook-tester"
+  | "comparison"
   | "settings";
 
 export interface TemplateShare {

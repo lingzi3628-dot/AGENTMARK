@@ -17,6 +17,7 @@ import { Icon } from "@/components/icon";
 import {
   Save, Play, Plus, Workflow, Sparkles, Loader2, PanelLeft,
   Undo2, Redo2, Copy, ClipboardPaste, Trash2,
+  Maximize2, Download, LayoutGrid, MapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -52,10 +53,112 @@ function StudioInner() {
   const [name, setName] = useState(activeAgent?.name ?? "Untitled Agent");
   const [saving, setSaving] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [showMiniMap, setShowMiniMap] = useState(true);
+  const [rfInstance, setRfInstance] = useState<import("@xyflow/react").ReactFlowInstance | null>(null);
   // Tracks whether there's a node in the in-memory clipboard so the Paste
   // button can enable/disable. Bumped on every copy.
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const seq = useRef(0);
+
+  // Auto-layout: arrange nodes in a left-to-right flow based on topological order
+  const autoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    pushHistory();
+    // Simple layout: sort by edges (upstream first), then stagger vertically
+    const indeg = new Map<string, number>();
+    const adj = new Map<string, string[]>();
+    for (const n of nodes) { indeg.set(n.id, 0); adj.set(n.id, []); }
+    for (const e of edges) {
+      if (!indeg.has(e.target)) indeg.set(e.target, 0);
+      if (!adj.has(e.source)) adj.set(e.source, []);
+      adj.get(e.source)!.push(e.target);
+      indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+    }
+    const queue = [...indeg.entries()].filter(([, d]) => d === 0).map(([id]) => id);
+    const levels = new Map<string, number>();
+    let current = queue;
+    let level = 0;
+    while (current.length > 0) {
+      const next: string[] = [];
+      for (const id of current) {
+        levels.set(id, level);
+        for (const target of adj.get(id) ?? []) {
+          indeg.set(target, (indeg.get(target) ?? 1) - 1);
+          if ((indeg.get(target) ?? 0) === 0) next.push(target);
+        }
+      }
+      current = next;
+      level++;
+    }
+    // Assign positions by level
+    const byLevel = new Map<number, typeof nodes>();
+    for (const n of nodes) {
+      const lv = levels.get(n.id) ?? 0;
+      if (!byLevel.has(lv)) byLevel.set(lv, []);
+      byLevel.get(lv)!.push(n);
+    }
+    const newNodes = [...nodes];
+    for (const [lv, lvNodes] of byLevel) {
+      lvNodes.forEach((n, i) => {
+        const idx = newNodes.findIndex((x) => x.id === n.id);
+        if (idx >= 0) {
+          newNodes[idx] = {
+            ...n,
+            position: { x: 80 + lv * 320, y: 120 + i * 140 },
+          };
+        }
+      });
+    }
+    setNodesSilent(newNodes);
+    toast.success("Layout applied");
+    setTimeout(() => rfInstance?.fitView({ padding: 0.25, duration: 300 }), 100);
+  }, [nodes, edges, pushHistory, setNodesSilent, rfInstance]);
+
+  const toggleMiniMap = useCallback(() => {
+    setShowMiniMap((v) => !v);
+  }, []);
+
+  const exportCanvasPng = useCallback(() => {
+    if (!rfInstance) {
+      toast.error("Canvas not ready");
+      return;
+    }
+    // Use React Flow's built-in toObject + html-to-image approach
+    // Since we don't have html-to-image installed, use a simpler approach:
+    // Open a new window with the canvas SVG
+    const data = rfInstance.toObject();
+    const width = 1200;
+    const height = 700;
+    const svgNodes = data.nodes.map((n: { id: string; position: { x: number; y: number }; data: { label?: string; kind?: string } }) => {
+      const x = n.position.x + 50;
+      const y = n.position.y + 30;
+      const label = n.data?.label || n.id;
+      return `<g transform="translate(${n.position.x},${n.position.y})">
+        <rect width="200" height="60" rx="8" fill="#1a1a2e" stroke="#34d399" stroke-width="2"/>
+        <text x="100" y="35" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="500">${label}</text>
+      </g>`;
+    }).join("\n");
+    const svgEdges = data.edges.map((e: { source: string; target: string }) => {
+      const s = data.nodes.find((n: { id: string }) => n.id === e.source);
+      const t = data.nodes.find((n: { id: string }) => n.id === e.target);
+      if (!s || !t) return "";
+      const x1 = s.position.x + 200, y1 = s.position.y + 30;
+      const x2 = t.position.x, y2 = t.position.y + 30;
+      return `<path d="M${x1},${y1} C${x1 + 60},${y1} ${x2 - 60},${y2} ${x2},${y2}" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#arrow)"/>`;
+    }).join("\n");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background:#0f1419">
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/></marker></defs>
+      ${svgEdges}${svgNodes}
+    </svg>`;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name || "agentmark-canvas"}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Canvas exported as SVG");
+  }, [rfInstance, name]);
 
   // Auto-load the most recent agent if none is active (unless the user just
   // clicked "New Agent"), so the canvas isn't empty on first visit.
@@ -407,6 +510,7 @@ function StudioInner() {
             onNodeClick={(_, n) => setSelectedNode(n.id)}
             onPaneClick={() => setSelectedNode(null)}
             onNodeDragStart={onNodeDragStart}
+            onInit={setRfInstance}
             // Disable ReactFlow's built-in Backspace-to-delete so our global
             // handler owns the delete semantics (and respects input focus).
             deleteKeyCode={null}
@@ -418,15 +522,17 @@ function StudioInner() {
           >
             <Background variant={BackgroundVariant.Dots} gap={28} size={1.5} color="var(--muted-foreground)" />
             <Controls showInteractive={false} />
-            <MiniMap
-              pannable
-              zoomable
-              nodeColor={(n: Node) => kindColor((n.data as WorkflowNodeData).kind)}
-              maskColor="rgb(0 0 0 / 0.6)"
-            />
+            {showMiniMap && (
+              <MiniMap
+                pannable
+                zoomable
+                nodeColor={(n: Node) => kindColor((n.data as WorkflowNodeData).kind)}
+                maskColor="rgb(0 0 0 / 0.6)"
+              />
+            )}
           </ReactFlow>
 
-          {/* Floating edit toolbar — undo/redo/copy/paste/delete */}
+          {/* Floating edit toolbar — undo/redo/copy/paste/delete + canvas actions */}
           <div className="absolute left-3 top-3 z-10">
             <Card className="flex-row gap-0.5 rounded-lg p-1 shadow-md">
               <Button
@@ -464,6 +570,35 @@ function StudioInner() {
                 title="Delete selected node (Delete)" aria-label="Delete node"
               >
                 <Trash2 className="h-4 w-4" />
+              </Button>
+              <div className="my-1 w-px self-stretch bg-border" aria-hidden />
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={() => rfInstance?.fitView({ padding: 0.25, duration: 300 })}
+                title="Fit to view" aria-label="Fit to view"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={autoLayout}
+                title="Auto-layout (arrange nodes neatly)" aria-label="Auto-layout"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={toggleMiniMap}
+                title="Toggle mini-map" aria-label="Toggle mini-map"
+              >
+                <MapIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={exportCanvasPng}
+                title="Export canvas as PNG" aria-label="Export PNG"
+              >
+                <Download className="h-4 w-4" />
               </Button>
             </Card>
           </div>
