@@ -11,6 +11,7 @@ export type NodeKind =
   | "memory" // conversation memory store
   | "sub-agent" // calls another agent as part of this workflow
   | "code" // run custom JavaScript in a sandbox
+  | "python" // run Python via Pyodide (WASM)
   | "approval" // human-in-the-loop pause + review
   | "output"; // final result
 
@@ -67,6 +68,9 @@ export interface WorkflowNodeData {
   customModelName?: string;
   customApiUrl?: string;
   customApiKey?: string;
+  // Python code node
+  pythonCode?: string;
+  pythonTimeout?: number;
   // code node — raw JS function body executed in a vm sandbox
   code?: string;
   // code node — execution timeout in ms (default 5000, max 30000)

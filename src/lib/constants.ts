@@ -112,7 +112,8 @@ export const NODE_PALETTE = [
   { kind: "knowledge", label: "Knowledge", icon: "database", desc: "Injects documents as context" },
   { kind: "memory", label: "Memory", icon: "brain", desc: "Save and recall values across runs" },
   { kind: "router", label: "Router", icon: "git-branch", desc: "Branch the workflow by keyword" },
-  { kind: "code", label: "Code", icon: "code", desc: "Run custom JavaScript in a sandbox" },
+  { kind: "code", label: "Code (JS)", icon: "code", desc: "Run custom JavaScript in a sandbox" },
+  { kind: "python", label: "Code (Python)", icon: "terminal", desc: "Run Python (numpy, pandas, scikit-learn) via Pyodide" },
   { kind: "image-gen", label: "Image Generator", icon: "image", desc: "Creates images from a text prompt" },
   { kind: "vision", label: "Vision", icon: "eye", desc: "Understands images with GLM-4.5V" },
   {

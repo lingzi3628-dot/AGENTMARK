@@ -400,6 +400,39 @@ export async function* executeAgent(
             return;
           }
         }
+      } else if (data.kind === "python") {
+        // Run Python code via Pyodide (WASM sandbox).
+        const pyCode = (data.pythonCode ?? "").trim();
+        if (!pyCode) {
+          outputs.set(node.id, "[python: empty — write Python in the inspector]");
+        } else {
+          const pyInput = incomingContext(node.id);
+          const timeout = Math.min(Math.max(data.pythonTimeout ?? 30000, 5000), 120000);
+          try {
+            const { runPython } = await import("./python");
+            const result = await runPython(pyCode, pyInput, ctx.history, timeout);
+            for (const line of result.stdout) {
+              yield { type: "delta", content: `\n[python stdout] ${line}\n` };
+            }
+            if (result.ok) {
+              const out = result.output ?? "";
+              outputs.set(node.id, out);
+              totalTokens += Math.ceil(out.length / 4);
+            } else {
+              const errMsg = result.error ?? "unknown python error";
+              outputs.set(node.id, `[python error: ${errMsg}]`);
+              yield { type: "trace", node: node.id, label, status: "error" };
+              yield { type: "error", node: node.id, message: `Python node "${label}" failed: ${errMsg}` };
+              return;
+            }
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : "python execution failed";
+            outputs.set(node.id, `[python error: ${errMsg}]`);
+            yield { type: "trace", node: node.id, label, status: "error" };
+            yield { type: "error", node: node.id, message: `Python node "${label}" failed: ${errMsg}` };
+            return;
+          }
+        }
       } else if (data.kind === "router") {
         // A router doesn't transform data; it passes through upstream and
         // emits a trace note about which branch would be taken. The actual
