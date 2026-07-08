@@ -71,7 +71,7 @@
     "ioredis": "^5.11.1",
     "isolated-vm": "^7.0.0",
     "jmespath": "^0.16.0",
-    "lucide-react": "^0.525.0",
+    "lucide-react": "^1.23.0",
     "next": "^16.1.1",
     "next-auth": "^4.24.11",
     "next-intl": "^4.3.4",
